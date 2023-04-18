@@ -47,7 +47,7 @@ impl Renderable {
         self.behaviour.process(Box::new(self.shader.as_mut()), time);
     }
     pub fn builder() -> RenderableBuilder {
-        RenderableBuilder { children: vec![], position: None, dimensions: None, shader: None, behaviour: None }
+        RenderableBuilder { children: vec![], position: Some(Point::new(0, 0)), dimensions: Some(Point::new(1280, 720)), shader: None, behaviour: None }
     }
 }
 

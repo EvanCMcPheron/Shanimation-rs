@@ -41,13 +41,9 @@ fn main() -> Result<(), MainError> {
         .change_context(MainError::FrameDictCreation)?;
 
     Scene::builder()
-        .with_fps(30)
         .with_length(Duration::from_secs(1))
-        .with_resolution(Point::new(1280, 720))
-        .with_output_filename("output.mp4")
         .add_child(
             Renderable::builder()
-                .with_position(Point::new(0, 0))
                 .with_dimensions(Point::new(500,500))
                 .with_behaviour(Box::new(MyBehaviour))
                 .with_shader(Box::new(MyFragShader))

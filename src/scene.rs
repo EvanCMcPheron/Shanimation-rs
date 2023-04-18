@@ -20,7 +20,7 @@ pub struct Scene {
 
 impl Scene {
     pub fn builder() -> SceneBuilder {
-        SceneBuilder { children: None, resolution: None, fps: None, length: None, output_filename: None }
+        SceneBuilder { children: Some(vec![]), resolution: Some(Point::new(1280,720)), fps: Some(30), length: None, output_filename: Some(PathBuf::from("output.mp4")) }
     }
 }
 
