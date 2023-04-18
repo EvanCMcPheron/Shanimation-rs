@@ -1,6 +1,6 @@
 use error_stack::{Context, IntoReport, Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
-use image::Rgba;
+pub use image::Rgba;
 pub use imageproc::point::Point;
 use std::fs::{DirBuilder, File};
 use std::io::Write;
@@ -25,28 +25,28 @@ pub struct Renderable {
 }
 
 impl Renderable {
-    fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
+    pub fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
         self.children.push(child);
     }
-    fn add_child_simple(&mut self, child: Renderable) -> Arc<RwLock<Renderable>> {
+    pub fn add_child_simple(&mut self, child: Renderable) -> Arc<RwLock<Renderable>> {
         //! Creates an Arc<RwLock<Renderable>> from child, clones it and adds it to children, then returns the Arc<RwLock<Renderable>>
         let arc = Arc::new(RwLock::new(child));
         self.add_child(arc.clone());
         arc
     }
-    fn get_children(&self) -> &Vec<Arc<RwLock<Renderable>>> {
+    pub fn get_children(&self) -> &Vec<Arc<RwLock<Renderable>>> {
         &self.children
     }
-    fn get_children_mut(&mut self) -> &mut Vec<Arc<RwLock<Renderable>>> {
+    pub fn get_children_mut(&mut self) -> &mut Vec<Arc<RwLock<Renderable>>> {
         &mut self.children
     }
-    fn run_shader(&mut self, uv_coords: Point<f32>, time: Duration) -> Rgba<u8> {
+    pub fn run_shader(&mut self, uv_coords: Point<f32>, time: Duration) -> Rgba<u8> {
         self.shader.get_pixel(uv_coords, time)
     }
-    fn run_behaviour(&mut self, time: Duration) {
+    pub fn run_behaviour(&mut self, time: Duration) {
         self.behaviour.process(Box::new(self.shader.as_mut()), time);
     }
-    fn builder() -> RenderableBuilder {
+    pub fn builder() -> RenderableBuilder {
         RenderableBuilder { children: vec![], position: None, dimensions: None, shader: None, behaviour: None }
     }
 }

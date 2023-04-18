@@ -49,7 +49,7 @@ impl SceneBuilder {
         self.length = Some(length);
         self
     }
-    pub fn with_output_filename<P: AsRef<Path>>(&mut self, output_filename: &P) -> &mut Self {
+    pub fn with_output_filename<P: AsRef<Path> + ?Sized>(&mut self, output_filename: &P) -> &mut Self {
         self.output_filename = Some(output_filename.as_ref().to_path_buf());
         self
     }
