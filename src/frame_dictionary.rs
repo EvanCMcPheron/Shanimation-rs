@@ -27,12 +27,12 @@ impl FrameDict {
                 .attach_printable_lazy(|| "Failed to create './frames directory")?;
         }
 
-        let mut file = File::create("./frames/FrameDict.txt")
+        let mut file = File::create("./frames/dict.txt")
             .into_report()
             .change_context(FrameDictError::FrameDictionaryCreation)
             .attach_printable_lazy(|| "Failed to create file")?;
 
-        let txt: String = (1..=self.frame_count)
+        let txt: String = (0..self.frame_count)
             .map(|i| format!("file '{i}.png'\n"))
             .collect();
 

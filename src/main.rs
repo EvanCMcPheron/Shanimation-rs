@@ -17,7 +17,7 @@ impl Behaviour for MyBehaviour {
 struct MyFragShader;
 
 impl FragShader for MyFragShader {
-    fn get_pixel(&self, __: &Img, uv_coords: Point<f32>, time: Duration) -> Rgba<u8> {
+    fn get_pixel(&self, __: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8> {
         let v = (255 as f64 * time.as_secs_f64()) as u8;
         Rgba([v, v, v, 255])
     }
@@ -28,18 +28,20 @@ impl FragShader for MyFragShader {
 pub enum MainError {
     FrameDictCreation,
     SceneCreation,
+    SceneRendering,
 }
 
 fn main() -> Result<(), MainError> {
-    FrameDict { frame_count: 30 }
-        .save()
-        .change_context(MainError::FrameDictCreation)?;
+    //FrameDict { frame_count: 30 }
+    //    .save()
+    //    .change_context(MainError::FrameDictCreation)?;
 
     Scene::builder()
         .with_length(Duration::from_secs(1))
         .add_child(
             Renderable::builder()
-                .with_dimensions(Point::new(500, 500))
+                .with_position(Point::new(200, 150))
+                .with_dimensions(Point::new(500, 300))
                 .with_behaviour(Box::new(MyBehaviour))
                 .with_shader(Box::new(MyFragShader))
                 .build()
@@ -48,7 +50,9 @@ fn main() -> Result<(), MainError> {
         )
         .build()
         .change_context(MainError::SceneCreation)
-        .attach_printable_lazy(|| "Failed to create scene")?;
+        .attach_printable_lazy(|| "Failed to create scene")?
+        .render()
+        .change_context(MainError::SceneRendering)?;
 
     Ok(())
 }

@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 pub trait FragShader {
-    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f32>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
+    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
 }
 
 pub trait Behaviour {
@@ -44,7 +44,7 @@ impl Renderable {
     pub fn run_shader(
         &mut self,
         current_frame: &Img,
-        uv_coords: Point<f32>,
+        uv_coords: Point<f64>,
         time: Duration,
     ) -> Rgba<u8> {
         self.shader.get_pixel(current_frame, uv_coords, time)
@@ -121,7 +121,7 @@ impl RenderableBuilder {
 
         struct DummyShader;
         impl FragShader for DummyShader {
-            fn get_pixel(&self, _: &Img, _: Point<f32>, _: Duration) -> Rgba<u8> {
+            fn get_pixel(&self, _: &Img, _: Point<f64>, _: Duration) -> Rgba<u8> {
                 Rgba([0, 0, 0, 0])
             }
         }
