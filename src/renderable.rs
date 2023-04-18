@@ -1,3 +1,4 @@
+use super::scene::Img;
 use error_stack::{Context, IntoReport, Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
 pub use image::Rgba;
@@ -9,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 pub trait FragShader {
-    fn get_pixel(&self, uv_coords: Point<f32>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
+    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f32>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
 }
 
 pub trait Behaviour {
@@ -40,14 +41,25 @@ impl Renderable {
     pub fn get_children_mut(&mut self) -> &mut Vec<Arc<RwLock<Renderable>>> {
         &mut self.children
     }
-    pub fn run_shader(&mut self, uv_coords: Point<f32>, time: Duration) -> Rgba<u8> {
-        self.shader.get_pixel(uv_coords, time)
+    pub fn run_shader(
+        &mut self,
+        current_frame: &Img,
+        uv_coords: Point<f32>,
+        time: Duration,
+    ) -> Rgba<u8> {
+        self.shader.get_pixel(current_frame, uv_coords, time)
     }
     pub fn run_behaviour(&mut self, time: Duration) {
         self.behaviour.process(Box::new(self.shader.as_mut()), time);
     }
     pub fn builder() -> RenderableBuilder {
-        RenderableBuilder { children: vec![], position: Some(Point::new(0, 0)), dimensions: Some(Point::new(1280, 720)), shader: None, behaviour: None }
+        RenderableBuilder {
+            children: vec![],
+            position: Some(Point::new(0, 0)),
+            dimensions: Some(Point::new(1280, 720)),
+            shader: None,
+            behaviour: None,
+        }
     }
 }
 
@@ -109,22 +121,22 @@ impl RenderableBuilder {
 
         struct DummyShader;
         impl FragShader for DummyShader {
-            fn get_pixel(&self, _: Point<f32>, _: Duration) -> Rgba<u8> {
+            fn get_pixel(&self, _: &Img, _: Point<f32>, _: Duration) -> Rgba<u8> {
                 Rgba([0, 0, 0, 0])
             }
         }
         struct DummyBehaviour;
         impl Behaviour for DummyBehaviour {
             fn process(&mut self, _: Box<&mut dyn FragShader>, _: Duration) {}
-            
-        }        
+        }
 
         Ok(Renderable {
             children: std::mem::replace(&mut self.children, vec![]),
             position: self.position.unwrap(),
             dimensions: self.dimensions.unwrap(),
             shader: std::mem::replace(&mut self.shader, Some(Box::new(DummyShader))).unwrap(),
-            behaviour: std::mem::replace(&mut self.behaviour, Some(Box::new(DummyBehaviour))).unwrap(),
+            behaviour: std::mem::replace(&mut self.behaviour, Some(Box::new(DummyBehaviour)))
+                .unwrap(),
         })
     }
 }
