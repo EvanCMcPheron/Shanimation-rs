@@ -46,4 +46,85 @@ impl Renderable {
     fn run_behaviour(&mut self, time: Duration) {
         self.behaviour.process(Box::new(self.shader.as_mut()), time);
     }
+    fn builder() -> RenderableBuilder {
+        RenderableBuilder { children: vec![], position: None, dimensions: None, shader: None, behaviour: None }
+    }
+}
+
+#[derive(ErrorStack, Debug, Clone)]
+#[error_message("Not all builder requirements were fullfilled")]
+pub struct RenderableBuilderError;
+
+pub struct RenderableBuilder {
+    children: Vec<Arc<RwLock<Renderable>>>,
+    position: Option<Point<isize>>,
+    dimensions: Option<Point<usize>>,
+    shader: Option<Box<dyn FragShader>>,
+    behaviour: Option<Box<dyn Behaviour>>,
+}
+
+impl RenderableBuilder {
+    pub fn add_child(&mut self, child: Renderable) -> &mut Self {
+        self.children.push(Arc::new(RwLock::new(child)));
+        self
+    }
+    pub fn with_position(&mut self, position: Point<isize>) -> &mut Self {
+        self.position = Some(position);
+        self
+    }
+    pub fn with_dimensions(&mut self, dimensions: Point<usize>) -> &mut Self {
+        self.dimensions = Some(dimensions);
+        self
+    }
+    pub fn with_shader(&mut self, shader: Box<dyn FragShader>) -> &mut Self {
+        self.shader = Some(shader);
+        self
+    }
+    pub fn with_behaviour<'b>(&mut self, behaviour: Box<dyn Behaviour>) -> &mut Self {
+        self.behaviour = Some(behaviour);
+        self
+    }
+    pub fn build(&mut self) -> Result<Renderable, RenderableBuilderError> {
+        let mut err = false;
+        let mut report = Err(Report::new(RenderableBuilderError));
+        if self.position.is_none() {
+            err = true;
+            report = report.attach_printable("No position was set");
+        }
+        if self.dimensions.is_none() {
+            err = true;
+            report = report.attach_printable("No dimensions were set");
+        }
+        if self.shader.is_none() {
+            err = true;
+            report = report.attach_printable("No shader was set");
+        }
+        if self.behaviour.is_none() {
+            err = true;
+            report = report.attach_printable("No behaviour was set");
+        }
+        if err {
+            return report;
+        }
+
+        struct DummyShader;
+        impl FragShader for DummyShader {
+            fn get_pixel(&self, _: Point<f32>, _: Duration) -> Rgba<u8> {
+                Rgba([0, 0, 0, 0])
+            }
+        }
+        struct DummyBehaviour;
+        impl Behaviour for DummyBehaviour {
+            fn process(&mut self, _: Box<&mut dyn FragShader>, _: Duration) {}
+            
+        }        
+
+        Ok(Renderable {
+            children: std::mem::replace(&mut self.children, vec![]),
+            position: self.position.unwrap(),
+            dimensions: self.dimensions.unwrap(),
+            shader: std::mem::replace(&mut self.shader, Some(Box::new(DummyShader))).unwrap(),
+            behaviour: std::mem::replace(&mut self.behaviour, Some(Box::new(DummyBehaviour))).unwrap(),
+        })
+    }
 }

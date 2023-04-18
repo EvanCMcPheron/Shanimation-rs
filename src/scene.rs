@@ -28,7 +28,6 @@ impl Scene {
 #[error_message("Not all builder requirements were fullfilled")]
 pub struct SceneBuilderError;
 
-
 pub struct SceneBuilder {
     children: Option<Vec<Arc<RwLock<Renderable>>>>,
     resolution: Option<Point<usize>>,
@@ -87,6 +86,7 @@ impl SceneBuilder {
         if err {
             return report;
         }
+        
         Ok(Scene {
             children: self.children.clone().unwrap(),
             resolution: self.resolution.clone().unwrap(),
