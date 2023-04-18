@@ -60,7 +60,7 @@ impl SceneBuilder {
         self.children.as_mut().unwrap().push(Arc::new(RwLock::new(child)));
         self
     }
-    pub fn build(&self) -> Result<Scene, SceneBuilderError> {
+    pub fn build(&mut self) -> Result<Scene, SceneBuilderError> {
         let mut err = false;
         let mut report = Err(Report::new(SceneBuilderError));
         if self.children.is_none() {
@@ -88,11 +88,11 @@ impl SceneBuilder {
         }
         
         Ok(Scene {
-            children: self.children.clone().unwrap(),
-            resolution: self.resolution.clone().unwrap(),
-            fps: self.fps.clone().unwrap(),
-            length: self.length.clone().unwrap(),
-            output_filename: self.output_filename.clone().unwrap(),
+            children: std::mem::replace(&mut self.children, None).unwrap(),
+            resolution: self.resolution.unwrap(),
+            fps: self.fps.unwrap(),
+            length: std::mem::replace(&mut self.length, None).unwrap(),
+            output_filename: std::mem::replace(&mut self.output_filename, None).unwrap(),
         })
             
     }
