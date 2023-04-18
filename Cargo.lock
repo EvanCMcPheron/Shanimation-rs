@@ -736,7 +736,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bebd363326d05ec3e2f532ab7660680f3b02130d780c299bca73469d521bc0ed"
 
 [[package]]
-name = "shanimation"
+name = "shanimation-rs"
 version = "0.1.0"
 dependencies = [
  "error-stack",

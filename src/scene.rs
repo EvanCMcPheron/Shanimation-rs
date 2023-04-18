@@ -113,7 +113,7 @@ impl Scene {
             child.get_children().iter().map(Clone::clone).for_each(|c| stack.push(c));
             child.run_behaviour(time);
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
-            todo!();
+            todo!()
         }
         //write image buffer to file
         todo!()
