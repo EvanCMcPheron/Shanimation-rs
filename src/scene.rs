@@ -9,11 +9,27 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use super::renderable::*;
+use image::RgbaImage;
+
+pub struct Img {
+    pub dimensions: Point<usize>,
+    pub image: RgbaImage,
+}
+
+impl Img {
+    pub fn new(dimensions: Point<usize>) -> Self {
+        Self {
+            dimensions,
+            image: RgbaImage::new(dimensions.x as u32, dimensions.y as u32),
+        }
+    }
+}
 
 #[derive(ErrorStack, Debug)]
 #[error_message("An error occured while rendering a scene")]
 pub enum SceneRenderingError {
-    Null
+    FileWritingError,
+    FrameRenderingError,
 }
 
 pub struct Scene {
@@ -42,15 +58,37 @@ impl Scene {
     pub fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
         self.children.push(child);
     }
-    fn render_frames() -> Result<(), SceneRenderingError> {
+    fn render_frames(&self) -> Result<(), SceneRenderingError> {
         //delete frame directory
+        if Path::new("./frames").exists() {
+            std::fs::remove_dir_all("./frames")
+                .into_report()
+                .change_context(SceneRenderingError::FileWritingError)
+                .attach_printable("Failed to delete frame directory")?;
+        }
         //create frame directory
+        DirBuilder::new()
+            .recursive(true)
+            .create("./frames")
+            .into_report()
+            .change_context(SceneRenderingError::FileWritingError)
+            .attach_printable("Failed to create frame directory")?;
         //figure out frame count, with matching duration to send to behaviour and shader
+        let max_frames = self.length.as_secs() as usize * self.fps;
+        let seconds_per_frame = 1.0 / self.fps as f64;
         //for each frame, run render frame
-        todo!()
+        for (frame_indx, time) in (0..max_frames).map(|i| Duration::from_secs_f64(i as f64 * seconds_per_frame)).enumerate() {
+            //TODO: Potentially introduce a threadpool here to 'concurrently' render all frames
+            self.render_frame(frame_indx, time)
+                .change_context(SceneRenderingError::FrameRenderingError)
+                .attach_printable_lazy(|| format!("Failed to render frame {} at time {} seconds", frame_indx, time.as_secs_f64()))?;
+
+        }
+        Ok(())
     }
-    fn render_frame() -> Result<(), SceneRenderingError> {
+    fn render_frame(&self, frame_indx: usize, time: Duration) -> Result<(), SceneRenderingError> {
         //create an empty rgba image buffer
+        let mut img_buffer = Img::new(self.resolution);
         //'recursively' iterate through all children of the scene, and their children, (run from top down)
         //for each child, run their run their behaviour's process, then for every pixel, run their get_pixel (THIS CAN EASILY BE PARRELLELIZED) and overide the pixel on the main image buffer'
         //write image buffer to file
