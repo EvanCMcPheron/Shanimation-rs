@@ -1,6 +1,6 @@
 use error_stack::{Context, IntoReport, Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
-use shanimation::{
+use shanimation_rs::{
     frame_dictionary::FrameDict,
     renderable::{Behaviour, FragShader, Renderable, Rgba},
     scene::{Img, Scene},
