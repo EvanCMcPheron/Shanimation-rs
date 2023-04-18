@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use image::ImageFormat;
+use std::process::Command;
 
 use super::renderable::*;
 use super::frame_dictionary::FrameDict;
@@ -39,7 +40,8 @@ impl Img {
 pub enum SceneRenderingError {
     FileWritingError,
     FrameRenderingError,
-    FrameDictCreationError
+    FrameDictCreationError,
+    FFMPEGError,
 }
 
 pub struct Scene {
@@ -179,17 +181,42 @@ impl Scene {
             .attach_printable_lazy(|| "Failed to create frame dictionary")
     }
     fn compile_video(&self) -> Result<(), SceneRenderingError> {
+        //Create Output dir if it doesn't exist
+        if !Path::new("./output").exists() {
+            DirBuilder::new()
+                .recursive(true)
+                .create("./output")
+                .into_report()
+                .change_context(SceneRenderingError::FileWritingError)
+                .attach_printable_lazy(|| "Failed to create output directory")?;
+        }
+        //Generate an unused filename
+        let mut output_filename = "./output/scene_0.mp4".to_owned();
+        let mut i = 1;
+        while Path::new(&output_filename).exists() {
+            output_filename = format!("./output/scene_{}.mp4", i);
+            i += 1;
+        }
         //Use this command (add formatting)
-        //ffmpeg -reinit_filter 0 -f concat -safe 0 -i "ffmpeg.Txt" -vf "scale=1280:720:force_original_aspect_ratio=decrease:eval=frame,pad=1280:720:-1:-1:color=black:eval=frame,settb=AVTB,format=yuv420p" -r 15 output.mp4
-        //print outputs to stdout, maybe in the future add formatting?
-        todo!()
+        self.run_ffmpeg_cmd(output_filename)
+    }
+    fn run_ffmpeg_cmd(&self, path: String) -> Result<(), SceneRenderingError> {
+        //ffmpeg -reinit_filter 0 -f concat -safe 0 -i "frames/dict.txt" -vf "scale=1280:720:force_original_aspect_ratio=decrease:eval=frame,pad=1280:720:-1:-1:color=black:eval=frame,settb=AVTB,setpts=0.033333333*N/TB,format=yuv420p" -r 30 -movflags +faststart output.mp4
+        let ffmpeg = Command::new("ffmpeg")
+            .args(format!("-reinit_filter 0 -f concat -safe 0 -i \"frames/dict.txt\" -vf \"scale={}:{}:force_original_aspect_ratio=decrease:eval=frame,pad={}:{}:-1:-1:color=black:eval=frame,settb=AVTB,setpts={}*N/TB,format=yuv420p\" -r {} -movflags +faststart {path}", self.resolution.x, self.resolution.y, self.resolution.x, self.resolution.y, 1.0 / self.fps as f32, self.fps).split_ascii_whitespace())
+            .spawn()
+            .into_report()
+            .change_context(SceneRenderingError::FFMPEGError)
+            .attach_printable_lazy(|| "Failed to concatinate frames into video through ffmpeg")?;
+        Ok(())
     }
     fn delete_frames_directory(&self) -> Result<(), SceneRenderingError> {
         todo!()
     }
     pub fn render(&self) -> Result<(), SceneRenderingError> {
         self.render_frames()
-            .attach_printable_lazy(|| "Failed to render frames")
+            .attach_printable_lazy(|| "Failed to render frames")?;
+        self.compile_video()
     }
 }
 
