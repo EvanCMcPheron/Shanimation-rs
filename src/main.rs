@@ -11,7 +11,9 @@ use std::time::Duration;
 struct MyBehaviour;
 
 impl Behaviour for MyBehaviour {
-    fn process(&mut self, _: Box<&mut dyn FragShader>, _: Duration) {}
+    fn process(&mut self, _: Box<&mut dyn FragShader>, _: Duration) {
+        
+    }
 }
 
 struct MyFragShader;
@@ -19,7 +21,7 @@ struct MyFragShader;
 impl FragShader for MyFragShader {
     fn get_pixel(&self, __: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8> {
         let v = (255 as f64 * time.as_secs_f64()) as u8;
-        Rgba([v, v, v, 255])
+        Rgba([(uv_coords.x * 255.0) as u8, (uv_coords.y * 255.0) as u8, v, 255])
     }
 }
 
@@ -32,10 +34,6 @@ pub enum MainError {
 }
 
 fn main() -> Result<(), MainError> {
-    //FrameDict { frame_count: 30 }
-    //    .save()
-    //    .change_context(MainError::FrameDictCreation)?;
-
     Scene::builder()
         .with_length(Duration::from_secs(1))
         .add_child(

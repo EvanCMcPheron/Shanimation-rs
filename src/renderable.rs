@@ -14,18 +14,22 @@ pub trait FragShader {
 }
 
 pub trait Behaviour {
-    fn process(&mut self, shader: Box<&mut dyn FragShader>, time: Duration); //Would be nice to figure out how to use an associated type for the shader, but that would require a generic in the Renderable declaration, which is not possible due to the recursive tree-like structure
+    fn process(&mut self, renderable: &mut Renderable, time: Duration); 
 }
 
 pub struct Renderable {
-    children: Vec<Arc<RwLock<Renderable>>>,
-    pub position: Point<isize>,
-    pub dimensions: Point<usize>,
+    pub params: RenderableParams,
     shader: Box<dyn FragShader>,
     behaviour: Box<dyn Behaviour>,
 }
 
-impl Renderable {
+pub struct RenderableParams {
+    children: Vec<Arc<RwLock<Renderable>>>,
+    pub position: Point<isize>,
+    pub dimensions: Point<usize>,
+}
+
+impl RenderableParams {
     pub fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
         self.children.push(child);
     }
@@ -41,6 +45,22 @@ impl Renderable {
     pub fn get_children_mut(&mut self) -> &mut Vec<Arc<RwLock<Renderable>>> {
         &mut self.children
     }
+}
+
+impl Renderable {
+    pub fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
+        self.params.add_child(child);
+    }
+    pub fn add_child_simple(&mut self, child: Renderable) -> Arc<RwLock<Renderable>> {
+        //! Creates an Arc<RwLock<Renderable>> from child, clones it and adds it to children, then returns the Arc<RwLock<Renderable>>
+        self.params.add_child_simple(child)
+    }
+    pub fn get_children(&self) -> &Vec<Arc<RwLock<Renderable>>> {
+        self.params.get_children()
+    }
+    pub fn get_children_mut(&mut self) -> &mut Vec<Arc<RwLock<Renderable>>> {
+        self.params.get_children_mut()
+    }
     pub fn run_shader(
         &mut self,
         current_frame: &Img,
@@ -50,7 +70,7 @@ impl Renderable {
         self.shader.get_pixel(current_frame, uv_coords, time)
     }
     pub fn run_behaviour(&mut self, time: Duration) {
-        self.behaviour.process(Box::new(self.shader.as_mut()), time);
+        self.behaviour.process(self, time);
     }
     pub fn builder() -> RenderableBuilder {
         RenderableBuilder {
@@ -127,13 +147,15 @@ impl RenderableBuilder {
         }
         struct DummyBehaviour;
         impl Behaviour for DummyBehaviour {
-            fn process(&mut self, _: Box<&mut dyn FragShader>, _: Duration) {}
+            fn process(&mut self, _: &mut Renderable, _: Duration) {}
         }
 
         Ok(Renderable {
-            children: std::mem::replace(&mut self.children, vec![]),
-            position: self.position.unwrap(),
-            dimensions: self.dimensions.unwrap(),
+            params: RenderableParams {
+                children: std::mem::replace(&mut self.children, vec![]),
+                position: self.position.unwrap(),
+                dimensions: self.dimensions.unwrap(),
+            },
             shader: std::mem::replace(&mut self.shader, Some(Box::new(DummyShader))).unwrap(),
             behaviour: std::mem::replace(&mut self.behaviour, Some(Box::new(DummyBehaviour)))
                 .unwrap(),
