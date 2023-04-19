@@ -1,18 +1,18 @@
 use error_stack::{Context, IntoReport, Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
+use image::ImageFormat;
 use image::Rgba;
 pub use imageproc::point::Point;
 use std::fs::{DirBuilder, File};
 use std::io::Write;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use image::ImageFormat;
-use std::process::Command;
 
-use super::renderable::*;
 use super::frame_dictionary::FrameDict;
+use super::renderable::*;
 use image::RgbaImage;
 
 pub struct Img {
@@ -50,6 +50,7 @@ pub struct Scene {
     fps: usize,
     length: Duration,
     output_filename: PathBuf,
+    pub debug: bool,
 }
 
 impl Scene {
@@ -60,6 +61,7 @@ impl Scene {
             fps: Some(30),
             length: None,
             output_filename: Some(PathBuf::from("output.mp4")),
+            debug: false,
         }
     }
     pub fn get_children(&self) -> &Vec<Arc<RwLock<Renderable>>> {
@@ -113,33 +115,41 @@ impl Scene {
         self.generate_frame_dictionary(max_frames)
     }
     fn render_frame(&self, frame_indx: usize, time: Duration) -> Result<(), SceneRenderingError> {
-        use std::cmp::{min, max};
+        use std::cmp::{max, min};
 
         //create an empty rgba image buffer
         let mut img_buffer = Img::new(self.resolution);
         //'recursively' iterate through all children of the scene, and their children, (run from top down)
         let mut stack = vec![];
-        self.children.iter().map(Clone::clone).for_each(|c| stack.push(c));
+        self.children
+            .iter()
+            .map(Clone::clone)
+            .for_each(|c| stack.push(c));
         //for each child, run their run their behaviour's process, then for every pixel, run their get_pixel (THIS CAN EASILY BE PARRELLELIZED) and overide the pixel on the main image buffer'
         while let Some(child) = stack.pop() {
             let mut child = child.write().unwrap();
-            child.get_children().iter().map(Clone::clone).for_each(|c| stack.push(c));
+            child
+                .get_children()
+                .iter()
+                .map(Clone::clone)
+                .for_each(|c| stack.push(c));
             child.run_behaviour(time);
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
-            let up_left = Point::new(
-                max(0, child.position.x),
-                max(0, child.position.y),
-            );
+            let up_left = Point::new(max(0, child.position.x), max(0, child.position.y));
             let down_right = Point::new(
-                min(self.resolution.x as isize, child.position.x + child.dimensions.x as isize),
-                min(self.resolution.y as isize, child.position.y + child.dimensions.y as isize),
+                min(
+                    self.resolution.x as isize,
+                    child.position.x + child.dimensions.x as isize,
+                ),
+                min(
+                    self.resolution.y as isize,
+                    child.position.y + child.dimensions.y as isize,
+                ),
             );
             ((up_left.y)..=(down_right.y))
                 .map(|y| {
                     ((up_left.x)..=(down_right.x))
-                        .map(|x| {
-                            Point::new(x, y)
-                        })
+                        .map(|x| Point::new(x, y))
                         .collect::<Vec<Point<isize>>>() // *may* cause bottleneck
                 })
                 .flatten()
@@ -149,20 +159,20 @@ impl Scene {
                     let c = Point::new(p.x as usize, p.y as usize);
                     let current_color = img_buffer.get_pixel(c);
                     let a = color.0[3];
-                    let mixer = |i: usize| (color.0[i] as f32 / 255.0 * a as f32 + current_color.0[i] as f32 / 255.0 * (255.0 - a as f32)) as u8;
-                    let a_mixer = || a + current_color.0[3] * (255 - a);    //Not sure if this is how alpha mixing SHOULD work, but it seems right?
-                    let new_color = Rgba([
-                        mixer(0),
-                        mixer(1),
-                        mixer(2),
-                        a_mixer()
-                    ]);
+                    let mixer = |i: usize| {
+                        (color.0[i] as f32 / 255.0 * a as f32
+                            + current_color.0[i] as f32 / 255.0 * (255.0 - a as f32))
+                            as u8
+                    };
+                    let a_mixer = || a + current_color.0[3] * (255 - a); //Not sure if this is how alpha mixing SHOULD work, but it seems right?
+                    let new_color = Rgba([mixer(0), mixer(1), mixer(2), a_mixer()]);
                     img_buffer.set_pixel(c, new_color);
                 })
-            
         }
         //write image buffer to file
-        img_buffer.image.save(format!("./frames/{}.png", frame_indx))
+        img_buffer
+            .image
+            .save(format!("./frames/{}.png", frame_indx))
             .into_report()
             .change_context(SceneRenderingError::FileWritingError)
             .attach_printable_lazy(|| format!("Failed to write frame {} to file", frame_indx))?;
@@ -176,7 +186,8 @@ impl Scene {
      */
     fn generate_frame_dictionary(&self, frame_count: usize) -> Result<(), SceneRenderingError> {
         //Create and save a frame dictionary
-        FrameDict {frame_count}.save()
+        FrameDict { frame_count }
+            .save()
             .change_context(SceneRenderingError::FrameDictCreationError)
             .attach_printable_lazy(|| "Failed to create frame dictionary")
     }
@@ -202,16 +213,39 @@ impl Scene {
     }
     fn run_ffmpeg_cmd(&self, path: String) -> Result<(), SceneRenderingError> {
         //ffmpeg -reinit_filter 0 -f concat -safe 0 -i "frames/dict.txt" -vf "scale=1280:720:force_original_aspect_ratio=decrease:eval=frame,pad=1280:720:-1:-1:color=black:eval=frame,settb=AVTB,setpts=0.033333333*N/TB,format=yuv420p" -r 30 -movflags +faststart output.mp4
-        let ffmpeg = Command::new("ffmpeg")
-            .args(format!("-reinit_filter 0 -f concat -safe 0 -i \"frames/dict.txt\" -vf \"scale={}:{}:force_original_aspect_ratio=decrease:eval=frame,pad={}:{}:-1:-1:color=black:eval=frame,settb=AVTB,setpts={}*N/TB,format=yuv420p\" -r {} -movflags +faststart {path}", self.resolution.x, self.resolution.y, self.resolution.x, self.resolution.y, 1.0 / self.fps as f32, self.fps).split_ascii_whitespace())
+
+        //ffmpeg -f concat -safe 0 -i "frames/dict.txt" -vf "setpts=0.033333333*N/TB" -r 30 -movflags +faststart output.mp4
+        let mut glob_path = std::env::current_dir()
+            .into_report()
+            .change_context(SceneRenderingError::FFMPEGError)
+            .attach_printable_lazy(|| "Failed to get current directory")?
+            .as_os_str()
+            .to_str()
+            .ok_or(Report::new(SceneRenderingError::FFMPEGError))
+            .attach_printable_lazy(|| "Failed to convert current directory to string")?
+            .to_owned();
+
+        Command::new("ffmpeg")
+            .current_dir(glob_path)
+            .arg("-f")
+            .arg("concat")
+            .arg("-safe")
+            .arg("0")
+            .arg("-i")
+            .arg("./frames/dict.txt")
+            .arg("-filter")
+            .arg(format!("setpts={h}*N/TB", h = 1.0 / self.fps as f32))
+            .arg("-r")
+            .arg(format!("{}", self.fps))
+            .arg("-movflags")
+            .arg("+faststart")
+            .arg(path)
             .spawn()
             .into_report()
             .change_context(SceneRenderingError::FFMPEGError)
             .attach_printable_lazy(|| "Failed to concatinate frames into video through ffmpeg")?;
+
         Ok(())
-    }
-    fn delete_frames_directory(&self) -> Result<(), SceneRenderingError> {
-        todo!()
     }
     pub fn render(&self) -> Result<(), SceneRenderingError> {
         self.render_frames()
@@ -230,6 +264,7 @@ pub struct SceneBuilder {
     fps: Option<usize>,
     length: Option<Duration>,
     output_filename: Option<PathBuf>,
+    debug: bool,
 }
 
 impl SceneBuilder {
@@ -260,6 +295,10 @@ impl SceneBuilder {
             .as_mut()
             .unwrap()
             .push(Arc::new(RwLock::new(child)));
+        self
+    }
+    pub fn is_debug(&mut self, debug: bool) -> &mut Self {
+        self.debug = debug;
         self
     }
     pub fn build(&mut self) -> Result<Scene, SceneBuilderError> {
@@ -295,13 +334,18 @@ impl SceneBuilder {
             fps: self.fps.unwrap(),
             length: std::mem::replace(&mut self.length, None).unwrap(),
             output_filename: std::mem::replace(&mut self.output_filename, None).unwrap(),
+            debug: self.debug,
         })
     }
 }
 
-pub fn to_uv(top_left: Point<isize>, bottom_right: Point<isize>, point: Point<isize>) -> Point<f64> {
+pub fn to_uv(
+    top_left: Point<isize>,
+    bottom_right: Point<isize>,
+    point: Point<isize>,
+) -> Point<f64> {
     Point::new(
-        (point.x - top_left.x) as f64 / (bottom_right.x - top_left.x) as f64, 
-        1.0 - (point.y - top_left.y) as f64 / (bottom_right.y - top_left.y) as f64  //flip y (NOTE: This ASSUMES Image uses crt-style coordinates, may be unnecessary it it doesn't)
+        (point.x - top_left.x) as f64 / (bottom_right.x - top_left.x) as f64,
+        1.0 - (point.y - top_left.y) as f64 / (bottom_right.y - top_left.y) as f64, //flip y (NOTE: This ASSUMES Image uses crt-style coordinates, may be unnecessary it it doesn't)
     )
 }

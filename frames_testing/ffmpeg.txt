@@ -1,6 +1,0 @@
-file '001.png'
-file '002.png'
-file '003.png'
-file '004.png'
-file '005.png'
-file '006.png'
