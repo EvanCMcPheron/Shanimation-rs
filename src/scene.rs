@@ -135,20 +135,23 @@ impl Scene {
                 .for_each(|c| stack.push(c));
             child.run_behaviour(time);
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
-            let up_left = Point::new(max(0, child.position.x), max(0, child.position.y));
+            let up_left = Point::new(
+                max(0, child.params.position.x),
+                max(0, child.params.position.y),
+            );
             let down_right = Point::new(
                 min(
                     self.resolution.x as isize,
-                    child.position.x + child.dimensions.x as isize,
+                    child.params.position.x + child.params.dimensions.x as isize,
                 ),
                 min(
                     self.resolution.y as isize,
-                    child.position.y + child.dimensions.y as isize,
+                    child.params.position.y + child.params.dimensions.y as isize,
                 ),
             );
-            ((up_left.y)..=(down_right.y))
+            ((up_left.y)..(down_right.y))
                 .map(|y| {
-                    ((up_left.x)..=(down_right.x))
+                    ((up_left.x)..(down_right.x))
                         .map(|x| Point::new(x, y))
                         .collect::<Vec<Point<isize>>>() // *may* cause bottleneck
                 })

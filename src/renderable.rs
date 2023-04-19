@@ -9,17 +9,17 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-pub trait FragShader {
-    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
-}
-
 pub trait Behaviour {
-    fn process(&mut self, renderable: &mut Renderable, time: Duration); 
+    fn process(
+        &mut self,
+        renderable: &mut RenderableParams,
+        time: Duration,
+    );
+    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
 }
 
 pub struct Renderable {
     pub params: RenderableParams,
-    shader: Box<dyn FragShader>,
     behaviour: Box<dyn Behaviour>,
 }
 
@@ -67,17 +67,17 @@ impl Renderable {
         uv_coords: Point<f64>,
         time: Duration,
     ) -> Rgba<u8> {
-        self.shader.get_pixel(current_frame, uv_coords, time)
+        self.behaviour.get_pixel(current_frame, uv_coords, time)
     }
     pub fn run_behaviour(&mut self, time: Duration) {
-        self.behaviour.process(self, time);
+        self.behaviour
+            .process(&mut self.params, time);
     }
     pub fn builder() -> RenderableBuilder {
         RenderableBuilder {
             children: vec![],
             position: Some(Point::new(0, 0)),
             dimensions: Some(Point::new(1280, 720)),
-            shader: None,
             behaviour: None,
         }
     }
@@ -91,7 +91,6 @@ pub struct RenderableBuilder {
     children: Vec<Arc<RwLock<Renderable>>>,
     position: Option<Point<isize>>,
     dimensions: Option<Point<usize>>,
-    shader: Option<Box<dyn FragShader>>,
     behaviour: Option<Box<dyn Behaviour>>,
 }
 
@@ -106,10 +105,6 @@ impl RenderableBuilder {
     }
     pub fn with_dimensions(&mut self, dimensions: Point<usize>) -> &mut Self {
         self.dimensions = Some(dimensions);
-        self
-    }
-    pub fn with_shader(&mut self, shader: Box<dyn FragShader>) -> &mut Self {
-        self.shader = Some(shader);
         self
     }
     pub fn with_behaviour<'b>(&mut self, behaviour: Box<dyn Behaviour>) -> &mut Self {
@@ -127,10 +122,6 @@ impl RenderableBuilder {
             err = true;
             report = report.attach_printable("No dimensions were set");
         }
-        if self.shader.is_none() {
-            err = true;
-            report = report.attach_printable("No shader was set");
-        }
         if self.behaviour.is_none() {
             err = true;
             report = report.attach_printable("No behaviour was set");
@@ -139,15 +130,17 @@ impl RenderableBuilder {
             return report;
         }
 
-        struct DummyShader;
-        impl FragShader for DummyShader {
-            fn get_pixel(&self, _: &Img, _: Point<f64>, _: Duration) -> Rgba<u8> {
-                Rgba([0, 0, 0, 0])
-            }
-        }
         struct DummyBehaviour;
         impl Behaviour for DummyBehaviour {
-            fn process(&mut self, _: &mut Renderable, _: Duration) {}
+            fn process(
+                &mut self,
+                _: &mut RenderableParams,
+                _: Duration,
+            ) {
+            }
+            fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8> {
+                Rgba([0,0,0,0])
+            }
         }
 
         Ok(Renderable {
@@ -156,7 +149,6 @@ impl RenderableBuilder {
                 position: self.position.unwrap(),
                 dimensions: self.dimensions.unwrap(),
             },
-            shader: std::mem::replace(&mut self.shader, Some(Box::new(DummyShader))).unwrap(),
             behaviour: std::mem::replace(&mut self.behaviour, Some(Box::new(DummyBehaviour)))
                 .unwrap(),
         })
