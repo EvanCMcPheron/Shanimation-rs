@@ -9,40 +9,40 @@ use shanimation_rs::{
 };
 use std::time::Duration;
 
-struct MyBehaviour {
-    fpos: Point<f64>,
-    radius: f64,
-}
+struct BasicShader;
 
-impl Behaviour for MyBehaviour {
-    fn process(
-        &mut self,
-        params: &mut RenderableParams,
-        time: Duration,
-    ) {
-        params.position = Point::new(self.fpos.x as isize, self.fpos.y as isize);
-        self.fpos.x += 9.141592;
-        self.radius -= 0.01;
+impl Behaviour for BasicShader {
+    fn process(&mut self, params: &mut RenderableParams, time: Duration) {
+        params.position.x += 1;
+        params.position.y += 2;
+        params.scale.x += 0.01;
+        params.scale.y -= 0.005;
     }
     fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8> {
-        let c = Point::new(uv_coords.x * 2.0 - 1.0, uv_coords.y * 2.0 - 1.0);
-        let r = (c.x * c.x + c.y * c.y).sqrt() < self.radius;
-        Rgba([0, (255.0 * 2.0 * c.x) as u8, (255.0 * 2.0* c.y) as u8, r as u8 * 255])
+        Rgba([
+            0,
+            (255.0 * uv_coords.x) as u8,
+            (255.0 * uv_coords.y) as u8,
+            255,
+        ])
     }
 }
 
-struct EmptyBehaviour;
+struct WhiteRect;
 
-impl Behaviour for EmptyBehaviour {
-    fn process(
-            &mut self,
-            renderable: &mut RenderableParams,
-            time: Duration,
-        ) {
-        
-    }
+impl Behaviour for WhiteRect {
+    fn process(&mut self, renderable: &mut RenderableParams, time: Duration) {}
     fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8> {
-        Rgba([255, 0, 0, 10])
+        Rgba([255, 255, 255, 120])
+    }
+}
+
+struct RedRect;
+
+impl Behaviour for RedRect {
+    fn process(&mut self, renderable: &mut RenderableParams, time: Duration) {}
+    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8> {
+        Rgba([255, 0, 0, 120])
     }
 }
 
@@ -56,30 +56,32 @@ pub enum MainError {
 
 fn main() -> Result<(), MainError> {
     Scene::builder()
-        .with_length(Duration::from_secs(1))
-        .add_child(
-            Renderable::builder()
-                .with_position(Point::new(400, 100))
-                .with_dimensions(Point::new(100, 1000))
-                .with_behaviour(Box::new(EmptyBehaviour))
-                .build()
-                .change_context(MainError::SceneCreation)
-                .attach_printable_lazy(|| "Failed to create renderable")?,
-        )
+        .with_length(Duration::from_secs(5))
         .add_child(
             Renderable::builder()
                 .with_position(Point::new(200, 150))
                 .with_dimensions(Point::new(300, 300))
-                .with_behaviour(Box::new(MyBehaviour {
-                    fpos: Point::new(200.0, 150.0),
-                    radius: 0.5,
-                }))
+                .with_behaviour(Box::new(BasicShader))
+                .add_child(
+                    Renderable::builder()
+                        .with_position(Point::new(50, 50))
+                        .with_dimensions(Point::new(100, 200))
+                        .with_behaviour(Box::new(WhiteRect))
+                        .add_child(
+                            Renderable::builder()
+                                .with_position(Point::new(50, 0))
+                                .with_dimensions(Point::new(30, 70))
+                                .with_behaviour(Box::new(RedRect))
+                                .build()
+                                .unwrap(),
+                        )
+                        .build()
+                        .unwrap(),
+                )
                 .build()
                 .change_context(MainError::SceneCreation)
                 .attach_printable_lazy(|| "Failed to create renderable")?,
-                
         )
-        
         .build()
         .change_context(MainError::SceneCreation)
         .attach_printable_lazy(|| "Failed to create scene")?

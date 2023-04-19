@@ -9,12 +9,10 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+pub mod rendered_image;
+
 pub trait Behaviour {
-    fn process(
-        &mut self,
-        renderable: &mut RenderableParams,
-        time: Duration,
-    );
+    fn process(&mut self, renderable: &mut RenderableParams, time: Duration);
     fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
 }
 
@@ -25,6 +23,7 @@ pub struct Renderable {
 
 pub struct RenderableParams {
     children: Vec<Arc<RwLock<Renderable>>>,
+    pub scale: Point<f64>,
     pub position: Point<isize>,
     pub dimensions: Point<usize>,
 }
@@ -70,11 +69,11 @@ impl Renderable {
         self.behaviour.get_pixel(current_frame, uv_coords, time)
     }
     pub fn run_behaviour(&mut self, time: Duration) {
-        self.behaviour
-            .process(&mut self.params, time);
+        self.behaviour.process(&mut self.params, time);
     }
     pub fn builder() -> RenderableBuilder {
         RenderableBuilder {
+            scale: Point::new(1.0, 1.0),
             children: vec![],
             position: Some(Point::new(0, 0)),
             dimensions: Some(Point::new(1280, 720)),
@@ -90,6 +89,7 @@ pub struct RenderableBuilderError;
 pub struct RenderableBuilder {
     children: Vec<Arc<RwLock<Renderable>>>,
     position: Option<Point<isize>>,
+    scale: Point<f64>,
     dimensions: Option<Point<usize>>,
     behaviour: Option<Box<dyn Behaviour>>,
 }
@@ -109,6 +109,10 @@ impl RenderableBuilder {
     }
     pub fn with_behaviour<'b>(&mut self, behaviour: Box<dyn Behaviour>) -> &mut Self {
         self.behaviour = Some(behaviour);
+        self
+    }
+    pub fn with_scale(&mut self, scale: Point<f64>) -> &mut Self {
+        self.scale = scale;
         self
     }
     pub fn build(&mut self) -> Result<Renderable, RenderableBuilderError> {
@@ -132,20 +136,21 @@ impl RenderableBuilder {
 
         struct DummyBehaviour;
         impl Behaviour for DummyBehaviour {
-            fn process(
-                &mut self,
-                _: &mut RenderableParams,
-                _: Duration,
-            ) {
-            }
-            fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8> {
-                Rgba([0,0,0,0])
+            fn process(&mut self, _: &mut RenderableParams, _: Duration) {}
+            fn get_pixel(
+                &self,
+                current_frame: &Img,
+                uv_coords: Point<f64>,
+                time: Duration,
+            ) -> Rgba<u8> {
+                Rgba([0, 0, 0, 0])
             }
         }
 
         Ok(Renderable {
             params: RenderableParams {
                 children: std::mem::replace(&mut self.children, vec![]),
+                scale: self.scale,
                 position: self.position.unwrap(),
                 dimensions: self.dimensions.unwrap(),
             },

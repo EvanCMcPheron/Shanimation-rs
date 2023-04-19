@@ -116,38 +116,48 @@ impl Scene {
     }
     fn render_frame(&self, frame_indx: usize, time: Duration) -> Result<(), SceneRenderingError> {
         use std::cmp::{max, min};
-
         //create an empty rgba image buffer
         let mut img_buffer = Img::new(self.resolution);
         //'recursively' iterate through all children of the scene, and their children, (run from top down)
-        let mut stack = vec![];
+        let mut stack: Vec<(Point<isize>, Point<f64>, Arc<RwLock<Renderable>>)> = vec![]; //(offset, child)
         self.children
             .iter()
             .map(Clone::clone)
-            .for_each(|c| stack.push(c));
+            .map(|c| (Point::new(0, 0), Point::new(1.0, 1.0), c))
+            .for_each(|v| stack.push(v));
         //for each child, run their run their behaviour's process, then for every pixel, run their get_pixel (THIS CAN EASILY BE PARRELLELIZED) and overide the pixel on the main image buffer'
-        while let Some(child) = stack.pop() {
+        while let Some((residual_offset, residual_scale, child)) = stack.pop() {
             let mut child = child.write().unwrap();
+
+            // This scale should be multiplied against the dimensions when calculating the bottom right point (and also get passed to children), but only residual scale should be applied to the top left point.
+            let next_scale = Point::new(
+                residual_scale.x * child.params.scale.x,
+                residual_scale.y * child.params.scale.y,
+            );
+
+            //This should be passed down to children AND used for coordinate calculations
+            let next_offset = Point::new(
+                residual_offset.x + (child.params.position.x as f64 * residual_scale.x) as isize,
+                residual_offset.y + (child.params.position.y as f64 * residual_scale.y) as isize,
+            );
+
             child
                 .get_children()
                 .iter()
                 .map(Clone::clone)
+                .map(|c| (next_offset, next_scale, c))
                 .for_each(|c| stack.push(c));
             child.run_behaviour(time);
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
-            let up_left = Point::new(
-                max(0, child.params.position.x),
-                max(0, child.params.position.y),
+            let up_left_unchecked = Point::new(next_offset.x, next_offset.y);
+            let down_right_unchecked = Point::new(
+                up_left_unchecked.x + ((child.params.dimensions.x as f64 * next_scale.x) as isize),
+                up_left_unchecked.y + ((child.params.dimensions.y as f64 * next_scale.y) as isize),
             );
+            let up_left = Point::new(max(up_left_unchecked.x, 0), max(up_left_unchecked.y, 0));
             let down_right = Point::new(
-                min(
-                    self.resolution.x as isize,
-                    child.params.position.x + child.params.dimensions.x as isize,
-                ),
-                min(
-                    self.resolution.y as isize,
-                    child.params.position.y + child.params.dimensions.y as isize,
-                ),
+                min(self.resolution.x as isize, down_right_unchecked.x),
+                min(self.resolution.y as isize, down_right_unchecked.y),
             );
             ((up_left.y)..(down_right.y))
                 .map(|y| {
@@ -157,7 +167,7 @@ impl Scene {
                 })
                 .flatten()
                 .for_each(|p| {
-                    let uv = to_uv(up_left, down_right, p);
+                    let uv = to_uv(up_left_unchecked, down_right_unchecked, p);
                     let color = child.run_shader(&img_buffer, uv, time);
                     let c = Point::new(p.x as usize, p.y as usize);
                     let current_color = img_buffer.get_pixel(c);

@@ -5,3 +5,4 @@ pub use imageproc::point::Point;
 pub mod frame_dictionary;
 pub mod renderable;
 pub mod scene;
+pub mod point;
