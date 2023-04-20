@@ -1,15 +1,13 @@
 use super::scene::Img;
 pub use super::Point;
-use error_stack::{Context, IntoReport, Report, Result, ResultExt};
+use error_stack::{Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
 pub use image::Rgba;
-use std::fs::{DirBuilder, File};
-use std::io::Write;
-use std::path::Path;
+
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-pub mod rendered_image;
+pub mod renderable_image;
 
 pub trait Behaviour {
     fn process(&mut self, renderable: &mut RenderableParams, time: Duration);
@@ -139,9 +137,9 @@ impl RenderableBuilder {
             fn process(&mut self, _: &mut RenderableParams, _: Duration) {}
             fn get_pixel(
                 &self,
-                current_frame: &Img,
-                uv_coords: Point<f64>,
-                time: Duration,
+                _current_frame: &Img,
+                _uv_coords: Point<f64>,
+                _time: Duration,
             ) -> Rgba<u8> {
                 Rgba([0, 0, 0, 0])
             }

@@ -1,10 +1,10 @@
-use error_stack::{Context, IntoReport, Report, Result, ResultExt};
+use error_stack::{IntoReport, Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
-use image::ImageFormat;
+
 use image::Rgba;
-use std::fs::{DirBuilder, File};
+use std::fs::DirBuilder;
 use std::io::Write;
-use std::ops::Deref;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
@@ -232,7 +232,7 @@ impl Scene {
         //ffmpeg -reinit_filter 0 -f concat -safe 0 -i "frames/dict.txt" -vf "scale=1280:720:force_original_aspect_ratio=decrease:eval=frame,pad=1280:720:-1:-1:color=black:eval=frame,settb=AVTB,setpts=0.033333333*N/TB,format=yuv420p" -r 30 -movflags +faststart output.mp4
 
         //ffmpeg -f concat -safe 0 -i "frames/dict.txt" -vf "setpts=0.033333333*N/TB" -r 30 -movflags +faststart output.mp4
-        let mut glob_path = std::env::current_dir()
+        let glob_path = std::env::current_dir()
             .into_report()
             .change_context(SceneRenderingError::FFMPEGError)
             .attach_printable_lazy(|| "Failed to get current directory")?

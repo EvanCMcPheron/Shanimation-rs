@@ -1,4 +1,3 @@
-use super::Point;
 use error_stack::{IntoReport, Result, ResultExt};
 use error_stack_derive::ErrorStack;
 use std::fs::{DirBuilder, File};

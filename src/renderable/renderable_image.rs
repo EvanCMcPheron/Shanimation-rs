@@ -1,7 +1,7 @@
 use super::RenderableParams;
-use super::{Behaviour, Point, Renderable, Rgba};
+use super::{Behaviour, Point, Rgba};
 use crate::scene::Img;
-use error_stack::{Context, IntoReport, Report, Result, ResultExt};
+use error_stack::{IntoReport, Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
 use image::io::Reader;
 use image::RgbaImage;
@@ -19,9 +19,9 @@ pub struct RendreableImage {
 }
 
 impl RendreableImage {
-    pub fn new<P: AsRef<Path>>(
+    pub fn new<P: AsRef<Path> + ?Sized>(
         path: &P,
-        process: Box<Box<dyn Fn(&mut RgbaImage, &mut RenderableParams, std::time::Duration)>>,
+        process: Box<dyn Fn(&mut RgbaImage, &mut RenderableParams, std::time::Duration)>,
     ) -> Result<Self, RenderableImageError> {
         let image = Reader::open(path)
             .into_report()
@@ -37,7 +37,7 @@ impl RendreableImage {
             .to_owned();
         Ok(Self {
             image,
-            process: Box::new(process),
+            process: process,
         })
     }
 }
@@ -48,9 +48,9 @@ impl Behaviour for RendreableImage {
     }
     fn get_pixel(
         &self,
-        current_frame: &Img,
+        _current_frame: &Img,
         uv_coords: Point<f64>,
-        time: std::time::Duration,
+        _time: std::time::Duration,
     ) -> Rgba<u8> {
         let image_coord: Point<u32> = uv_coords
             .map_y(|y| 1.0 - y) // Flip y

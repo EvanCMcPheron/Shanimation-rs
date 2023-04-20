@@ -1,5 +1,5 @@
 use fast_inv_sqrt::InvSqrt64;
-use num_traits::{float::Float, int::PrimInt, Num};
+use num_traits::{float::Float, Num};
 use std::ops::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
