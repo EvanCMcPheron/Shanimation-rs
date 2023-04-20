@@ -193,6 +193,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fast_inv_sqrt"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6e61a440b33ad57e53bb01b33438d019d7a7d50a05b9def525c578c0a7e974f"
+
+[[package]]
 name = "fdeflate"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -747,9 +753,11 @@ version = "0.1.0"
 dependencies = [
  "error-stack",
  "error-stack-derive",
+ "fast_inv_sqrt",
  "ffmpeg-sidecar",
  "image",
  "imageproc",
+ "num-traits",
 ]
 
 [[package]]

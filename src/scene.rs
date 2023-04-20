@@ -2,7 +2,6 @@ use error_stack::{Context, IntoReport, Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
 use image::ImageFormat;
 use image::Rgba;
-pub use imageproc::point::Point;
 use std::fs::{DirBuilder, File};
 use std::io::Write;
 use std::ops::Deref;
@@ -13,8 +12,10 @@ use std::time::Duration;
 
 use super::frame_dictionary::FrameDict;
 use super::renderable::*;
+use super::Point;
 use image::RgbaImage;
 
+#[derive(Clone)]
 pub struct Img {
     pub dimensions: Point<usize>,
     pub image: RgbaImage,
@@ -159,6 +160,9 @@ impl Scene {
                 min(self.resolution.x as isize, down_right_unchecked.x),
                 min(self.resolution.y as isize, down_right_unchecked.y),
             );
+
+            let old_image = img_buffer.clone();
+
             ((up_left.y)..(down_right.y))
                 .map(|y| {
                     ((up_left.x)..(down_right.x))
@@ -168,16 +172,16 @@ impl Scene {
                 .flatten()
                 .for_each(|p| {
                     let uv = to_uv(up_left_unchecked, down_right_unchecked, p);
-                    let color = child.run_shader(&img_buffer, uv, time);
+                    let color = child.run_shader(&old_image, uv, time);
                     let c = Point::new(p.x as usize, p.y as usize);
-                    let current_color = img_buffer.get_pixel(c);
+                    let current_color = old_image.get_pixel(c);
                     let a = color.0[3];
                     let mixer = |i: usize| {
                         (color.0[i] as f32 / 255.0 * a as f32
                             + current_color.0[i] as f32 / 255.0 * (255.0 - a as f32))
                             as u8
                     };
-                    let a_mixer = || a + current_color.0[3] * (255 - a); //Not sure if this is how alpha mixing SHOULD work, but it seems right?
+                    let a_mixer = || a + current_color.0[3].checked_mul(255 - a).unwrap_or(255); //Not sure if this is how alpha mixing SHOULD work, but it seems right?
                     let new_color = Rgba([mixer(0), mixer(1), mixer(2), a_mixer()]);
                     img_buffer.set_pixel(c, new_color);
                 })

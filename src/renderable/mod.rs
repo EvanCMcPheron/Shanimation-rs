@@ -1,8 +1,8 @@
 use super::scene::Img;
+pub use super::Point;
 use error_stack::{Context, IntoReport, Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
 pub use image::Rgba;
-pub use imageproc::point::Point;
 use std::fs::{DirBuilder, File};
 use std::io::Write;
 use std::path::Path;

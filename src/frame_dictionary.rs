@@ -1,6 +1,6 @@
+use super::Point;
 use error_stack::{IntoReport, Result, ResultExt};
 use error_stack_derive::ErrorStack;
-pub use imageproc::point::Point;
 use std::fs::{DirBuilder, File};
 use std::io::Write;
 use std::path::Path;

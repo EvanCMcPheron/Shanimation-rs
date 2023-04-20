@@ -1,0 +1,9 @@
+"filename", "language", "Rust", "comment", "blank", "total"
+"c:\Projects\rust_projects\shanimation\src\frame_dictionary.rs", "Rust", 39, 0, 8, 47
+"c:\Projects\rust_projects\shanimation\src\lib.rs", "Rust", 7, 0, 2, 9
+"c:\Projects\rust_projects\shanimation\src\main.rs", "Rust", 83, 0, 10, 93
+"c:\Projects\rust_projects\shanimation\src\point.rs", "Rust", 93, 1, 16, 110
+"c:\Projects\rust_projects\shanimation\src\renderable\mod.rs", "Rust", 148, 2, 12, 162
+"c:\Projects\rust_projects\shanimation\src\renderable\rendered_image.rs", "Rust", 31, 0, 4, 35
+"c:\Projects\rust_projects\shanimation\src\scene.rs", "Rust", 323, 24, 18, 365
+"Total", "-", 724, 27, 70, 821
