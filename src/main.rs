@@ -69,8 +69,7 @@ fn main() -> Result<(), MainError> {
                         .with_position(Point::new(50, 50))
                         .with_dimensions(Point::new(500, 400))
                         .with_behaviour(Box::new(
-                            RendreableImage::new("TestImage.png", Box::new(|_, _, _| {}))
-                                .unwrap(),
+                            RendreableImage::new("TestImage.png", Box::new(|_, _, _| {})).unwrap(),
                         ))
                         .add_child(
                             Renderable::builder()
