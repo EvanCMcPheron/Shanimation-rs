@@ -57,7 +57,7 @@ pub enum MainError {
 
 fn main() -> Result<(), MainError> {
     Scene::builder()
-        .with_length(Duration::from_secs(5))
+        .with_length(Duration::from_secs(10))
         .with_resolution(Point::new(1920, 1080))
         .add_child(
             Renderable::builder()

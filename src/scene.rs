@@ -18,6 +18,28 @@ use super::RateControlMode;
 use image::RgbaImage;
 use openh264::encoder::{Encoder, EncoderConfig};
 
+use crossterm::{
+    execute,
+    style::{
+        Print,
+        Color,
+        SetForegroundColor,
+        ResetColor
+    },
+    terminal::{
+        Clear,
+        ClearType,
+        BeginSynchronizedUpdate,
+        EndSynchronizedUpdate,
+        ScrollDown,
+        ScrollUp
+    },
+    cursor::{
+        Hide,
+    }
+};
+use std::time::Instant;
+
 #[derive(Clone)]
 pub struct Img {
     pub dimensions: Point<usize>,
@@ -46,6 +68,7 @@ pub enum SceneRenderingError {
     FrameRenderingError,
     EncodingError,
     FFMPEGError,
+    Crossterm,
 }
 
 pub struct Scene {
@@ -65,7 +88,7 @@ impl Scene {
             fps: Some(30),
             length: None,
             output_filename: Some(PathBuf::from("output.mp4")),
-            rate_control_mode: RateControlMode::Off,
+            rate_control_mode: RateControlMode::Bufferbased,
         }
     }
     pub fn get_children(&self) -> &Vec<Arc<RwLock<Renderable>>> {
@@ -85,7 +108,7 @@ impl Scene {
     fn render_frames(&self) -> Result<Vec<u8>, SceneRenderingError> {
         //figure out frame count, with matching duration to send to behaviour and shader
         let max_frames = self.length.as_secs() as usize * self.fps;
-        let seconds_per_frame = 1.0 / self.fps as f64;
+        let seconds_per_frame = 1.0 / self.fps as f64 * 295.0 / 250.0;
         let mut video_bytes: Vec<u8> = vec![];
         let mut encoder = Encoder::with_config(
             EncoderConfig::new(self.resolution.x as u32, self.resolution.y as u32)
@@ -95,11 +118,32 @@ impl Scene {
         .into_report()
         .change_context(SceneRenderingError::EncodingError)
         .attach_printable_lazy(|| "Failed to create encoder")?;
+        let start = Instant::now();
         //for each frame, run render frame
         for (frame_indx, time) in (0..max_frames)
             .map(|i| Duration::from_secs_f64(i as f64 * seconds_per_frame))
             .enumerate()
         {
+            let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * ((max_frames as f64 / std::cmp::max(1, frame_indx) as f64) - 1.0));   //minus one bcs x*a - x = x(a - 1)
+            execute!(
+                std::io::stdout(),
+                BeginSynchronizedUpdate,
+                Hide,
+                Print(format!("Rendering frame {}/{}", frame_indx, max_frames)),
+                SetForegroundColor(Color::Blue),
+                Print(format!(" ({:.0}%)", (frame_indx as f64 / max_frames as f64) * 100.0)),
+                SetForegroundColor(Color::Green),
+                Print(format!(" ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
+                ResetColor,
+                Print("...\n".to_owned()),
+                //ScrollDown(3),
+                EndSynchronizedUpdate,
+            )
+            .into_report()
+            .change_context(SceneRenderingError::Crossterm)
+            .attach_printable_lazy(|| "Failed to execute crossterm")?;
+        
+
             //TODO: Potentially introduce a threadpool here to 'concurrently' render all frames
             encoder
                 .encode(&rgba_to_yuv(
@@ -293,6 +337,7 @@ impl Scene {
         Ok(())
     }
     pub fn render(&self) -> Result<(), SceneRenderingError> {
+        ffmpeg_sidecar::download::auto_download();
         let bytes = self
             .render_frames()
             .attach_printable_lazy(|| "Failed to render frames")?;
@@ -327,7 +372,7 @@ impl SceneBuilder {
         self
     }
     pub fn with_length(&mut self, length: Duration) -> &mut Self {
-        self.length = Some(length);
+        self.length = Some(Duration::from_secs_f64(length.as_secs_f64() * 250.0 / 295.0));
         self
     }
     pub fn with_output_filename<P: AsRef<Path> + ?Sized>(
