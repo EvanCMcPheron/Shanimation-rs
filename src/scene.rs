@@ -10,10 +10,13 @@ use std::process::Command;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use super::encoding::rgba_to_yuv;
 use super::frame_dictionary::FrameDict;
 use super::renderable::*;
 use super::Point;
+use super::RateControlMode;
 use image::RgbaImage;
+use openh264::encoder::{Encoder, EncoderConfig};
 
 #[derive(Clone)]
 pub struct Img {
@@ -41,7 +44,7 @@ impl Img {
 pub enum SceneRenderingError {
     FileWritingError,
     FrameRenderingError,
-    FrameDictCreationError,
+    EncodingError,
     FFMPEGError,
 }
 
@@ -51,7 +54,7 @@ pub struct Scene {
     fps: usize,
     length: Duration,
     output_filename: PathBuf,
-    pub debug: bool,
+    rate_control_mode: RateControlMode,
 }
 
 impl Scene {
@@ -62,7 +65,7 @@ impl Scene {
             fps: Some(30),
             length: None,
             output_filename: Some(PathBuf::from("output.mp4")),
-            debug: false,
+            rate_control_mode: RateControlMode::Off,
         }
     }
     pub fn get_children(&self) -> &Vec<Arc<RwLock<Renderable>>> {
@@ -79,43 +82,49 @@ impl Scene {
     pub fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
         self.children.push(child);
     }
-    fn render_frames(&self) -> Result<(), SceneRenderingError> {
-        //delete frame directory
-        if Path::new("./frames").exists() {
-            std::fs::remove_dir_all("./frames")
-                .into_report()
-                .change_context(SceneRenderingError::FileWritingError)
-                .attach_printable("Failed to delete frame directory")?;
-        }
-        //create frame directory
-        DirBuilder::new()
-            .recursive(true)
-            .create("./frames")
-            .into_report()
-            .change_context(SceneRenderingError::FileWritingError)
-            .attach_printable("Failed to create frame directory")?;
+    fn render_frames(&self) -> Result<Vec<u8>, SceneRenderingError> {
         //figure out frame count, with matching duration to send to behaviour and shader
         let max_frames = self.length.as_secs() as usize * self.fps;
         let seconds_per_frame = 1.0 / self.fps as f64;
+        let mut video_bytes: Vec<u8> = vec![];
+        let mut encoder = Encoder::with_config(
+            EncoderConfig::new(self.resolution.x as u32, self.resolution.y as u32)
+                .max_frame_rate(self.fps as f32)
+                .rate_control_mode(self.rate_control_mode),
+        )
+        .into_report()
+        .change_context(SceneRenderingError::EncodingError)
+        .attach_printable_lazy(|| "Failed to create encoder")?;
         //for each frame, run render frame
         for (frame_indx, time) in (0..max_frames)
             .map(|i| Duration::from_secs_f64(i as f64 * seconds_per_frame))
             .enumerate()
         {
             //TODO: Potentially introduce a threadpool here to 'concurrently' render all frames
-            self.render_frame(frame_indx, time)
-                .change_context(SceneRenderingError::FrameRenderingError)
-                .attach_printable_lazy(|| {
-                    format!(
-                        "Failed to render frame {} at time {} seconds",
-                        frame_indx,
-                        time.as_secs_f64()
-                    )
-                })?;
+            encoder
+                .encode(&rgba_to_yuv(
+                    self.render_frame(frame_indx, time)
+                        .change_context(SceneRenderingError::FrameRenderingError)
+                        .attach_printable_lazy(|| {
+                            format!(
+                                "Failed to render frame {} at time {} seconds",
+                                frame_indx,
+                                time.as_secs_f64()
+                            )
+                        })?,
+                ))
+                .into_report()
+                .change_context(SceneRenderingError::EncodingError)
+                .attach_printable_lazy(|| "Failed to encode frame")?
+                .write_vec(&mut video_bytes);
         }
-        self.generate_frame_dictionary(max_frames)
+        Ok(video_bytes)
     }
-    fn render_frame(&self, frame_indx: usize, time: Duration) -> Result<(), SceneRenderingError> {
+    fn render_frame(
+        &self,
+        frame_indx: usize,
+        time: Duration,
+    ) -> Result<RgbaImage, SceneRenderingError> {
         use std::cmp::{max, min};
         //create an empty rgba image buffer
         let mut img_buffer = Img::new(self.resolution);
@@ -181,19 +190,16 @@ impl Scene {
                             + current_color.0[i] as f32 / 255.0 * (255.0 - a as f32))
                             as u8
                     };
-                    let a_mixer = || a + current_color.0[3].checked_mul(255 - a).unwrap_or(255); //Not sure if this is how alpha mixing SHOULD work, but it seems right?
+                    let a_mixer = || {
+                        a.checked_add(current_color.0[3].checked_mul(255 - a).unwrap_or(255))
+                            .unwrap_or(255)
+                    }; //Not sure if this is how alpha mixing SHOULD work, but it seems right?
                     let new_color = Rgba([mixer(0), mixer(1), mixer(2), a_mixer()]);
                     img_buffer.set_pixel(c, new_color);
                 })
         }
         //write image buffer to file
-        img_buffer
-            .image
-            .save(format!("./frames/{}.png", frame_indx))
-            .into_report()
-            .change_context(SceneRenderingError::FileWritingError)
-            .attach_printable_lazy(|| format!("Failed to write frame {} to file", frame_indx))?;
-        Ok(())
+        Ok(img_buffer.image)
     }
     /*
     fn post_process_frame() -> Result<(), SceneRenderingError> {
@@ -201,14 +207,7 @@ impl Scene {
         That would be run in this fn, which would be run directly after the 'render_frame()' fn.
     }
      */
-    fn generate_frame_dictionary(&self, frame_count: usize) -> Result<(), SceneRenderingError> {
-        //Create and save a frame dictionary
-        FrameDict { frame_count }
-            .save()
-            .change_context(SceneRenderingError::FrameDictCreationError)
-            .attach_printable_lazy(|| "Failed to create frame dictionary")
-    }
-    fn compile_video(&self) -> Result<(), SceneRenderingError> {
+    fn compile_video(&self, bytes: Vec<u8>) -> Result<PathBuf, SceneRenderingError> {
         //Create Output dir if it doesn't exist
         if !Path::new("./output").exists() {
             DirBuilder::new()
@@ -219,20 +218,49 @@ impl Scene {
                 .attach_printable_lazy(|| "Failed to create output directory")?;
         }
         //Generate an unused filename
-        let mut output_filename = "./output/scene_0.mp4".to_owned();
+        let mut output_filename = "./output/scene_0.h264".to_owned();
         let mut i = 1;
         while Path::new(&output_filename).exists() {
-            output_filename = format!("./output/scene_{}.mp4", i);
+            output_filename = format!("./output/scene_{}.h264", i);
             i += 1;
         }
         //Use this command (add formatting)
-        self.run_ffmpeg_cmd(output_filename)
+        //self.run_ffmpeg_cmd(output_filename)
+        let file = std::fs::File::create(&output_filename);
+        std::fs::write(&output_filename, bytes)
+            .into_report()
+            .change_context(SceneRenderingError::FileWritingError)
+            .attach_printable_lazy(|| "Failed to write video file")?;
+        Ok(PathBuf::from(output_filename))
     }
-    fn run_ffmpeg_cmd(&self, path: String) -> Result<(), SceneRenderingError> {
+    fn run_ffmpeg_cmd(&self, path: PathBuf) -> Result<(), SceneRenderingError> {
+        let glob_path = std::env::current_dir()
+            .into_report()
+            .change_context(SceneRenderingError::FFMPEGError)
+            .attach_printable_lazy(|| "Failed to get current directory")?
+            .as_os_str()
+            .to_str()
+            .ok_or(Report::new(SceneRenderingError::FFMPEGError))
+            .attach_printable_lazy(|| "Failed to convert current directory to string")?
+            .to_owned();
+
+        let mut mp4_path = path.clone();
+        mp4_path.set_extension("mp4");
+
+        Command::new("ffmpeg")
+            .current_dir(glob_path)
+            .arg("-i")
+            .arg(format!("{}", path.display()))
+            .arg(format!("{}", mp4_path.display()))
+            .spawn()
+            .into_report()
+            .change_context(SceneRenderingError::FFMPEGError)
+            .attach_printable_lazy(|| "Failed to convert video file")?;
+
         //ffmpeg -reinit_filter 0 -f concat -safe 0 -i "frames/dict.txt" -vf "scale=1280:720:force_original_aspect_ratio=decrease:eval=frame,pad=1280:720:-1:-1:color=black:eval=frame,settb=AVTB,setpts=0.033333333*N/TB,format=yuv420p" -r 30 -movflags +faststart output.mp4
 
         //ffmpeg -f concat -safe 0 -i "frames/dict.txt" -vf "setpts=0.033333333*N/TB" -r 30 -movflags +faststart output.mp4
-        let glob_path = std::env::current_dir()
+        /*let glob_path = std::env::current_dir()
             .into_report()
             .change_context(SceneRenderingError::FFMPEGError)
             .attach_printable_lazy(|| "Failed to get current directory")?
@@ -261,13 +289,14 @@ impl Scene {
             .into_report()
             .change_context(SceneRenderingError::FFMPEGError)
             .attach_printable_lazy(|| "Failed to concatinate frames into video through ffmpeg")?;
-
+        */
         Ok(())
     }
     pub fn render(&self) -> Result<(), SceneRenderingError> {
-        self.render_frames()
+        let bytes = self
+            .render_frames()
             .attach_printable_lazy(|| "Failed to render frames")?;
-        self.compile_video()
+        self.run_ffmpeg_cmd(self.compile_video(bytes)?)
     }
 }
 
@@ -281,10 +310,14 @@ pub struct SceneBuilder {
     fps: Option<usize>,
     length: Option<Duration>,
     output_filename: Option<PathBuf>,
-    debug: bool,
+    rate_control_mode: RateControlMode,
 }
 
 impl SceneBuilder {
+    pub fn with_rate_control_mode(&mut self, mode: RateControlMode) -> &mut Self {
+        self.rate_control_mode = mode;
+        self
+    }
     pub fn with_resolution(&mut self, resolution: Point<usize>) -> &mut Self {
         self.resolution = Some(resolution);
         self
@@ -312,10 +345,6 @@ impl SceneBuilder {
             .as_mut()
             .unwrap()
             .push(Arc::new(RwLock::new(child)));
-        self
-    }
-    pub fn is_debug(&mut self, debug: bool) -> &mut Self {
-        self.debug = debug;
         self
     }
     pub fn build(&mut self) -> Result<Scene, SceneBuilderError> {
@@ -351,7 +380,7 @@ impl SceneBuilder {
             fps: self.fps.unwrap(),
             length: std::mem::replace(&mut self.length, None).unwrap(),
             output_filename: std::mem::replace(&mut self.output_filename, None).unwrap(),
-            debug: self.debug,
+            rate_control_mode: self.rate_control_mode,
         })
     }
 }

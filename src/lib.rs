@@ -1,4 +1,5 @@
 #![feature(slice_pattern)]
+pub use encoding::RateControlMode;
 pub use error_stack::{Context, IntoReport, Report, Result, ResultExt};
 pub use error_stack_derive::ErrorStack;
 pub use point::Point;
