@@ -43,6 +43,8 @@ use crossterm::{
 use std::cmp::{max, min};
 use std::time::Instant;
 
+const LENGTH_ADJUSTMENT_FACTOR: f64 = 5.0 / 6.0;//250.0 / 295.0;
+
 #[derive(Clone)]
 pub struct Img {
     pub dimensions: Point<usize>,
@@ -80,7 +82,6 @@ pub struct Scene {
     resolution: Point<usize>,
     fps: usize,
     length: Duration,
-    output_filename: PathBuf,
     rate_control_mode: RateControlMode,
 }
 
@@ -91,7 +92,6 @@ impl Scene {
             resolution: Some(Point::new(1280, 720)),
             fps: Some(30),
             length: None,
-            output_filename: Some(PathBuf::from("output.mp4")),
             rate_control_mode: RateControlMode::Bufferbased,
         }
     }
@@ -112,7 +112,7 @@ impl Scene {
     fn render_frames(&self) -> Result<Vec<u8>, SceneRenderingError> {
         //figure out frame count, with matching duration to send to behaviour and shader
         let max_frames = self.length.as_secs() as usize * self.fps;
-        let seconds_per_frame = 1.0 / self.fps as f64 * 295.0 / 250.0;
+        let seconds_per_frame = 1.0 / self.fps as f64;
         let mut video_bytes: Vec<u8> = vec![];
         let mut encoder = Encoder::with_config(
             EncoderConfig::new(self.resolution.x as u32, self.resolution.y as u32)
@@ -137,8 +137,12 @@ impl Scene {
             let (sender, rec) = std::sync::mpsc::channel();
             receivers.push(rec);
             tp.execute(move || {
-                sender.send(rgba_to_yuv(
-                    cloned_scene.render_frame(frame_indx, time)
+                sender.send(
+                    (
+                        frame_indx,
+                        rgba_to_yuv(
+                    
+                        cloned_scene.render_frame(frame_indx, time)
                         .change_context(SceneRenderingError::FrameRenderingError)
                         .attach_printable_lazy(|| {
                             format!(
@@ -147,15 +151,19 @@ impl Scene {
                                 time.as_secs_f64()
                             )
                         }).unwrap()
-                )).expect("Failed to send frame through mpsc channel");
+                    
+                ))
+                ).expect("Failed to send frame through mpsc channel");
                 *cloned_count.write().unwrap().deref_mut() += 1;
             });
         }
         let mut has_finished_frames = false;
         let mut encoded_at_start = 0;
         for (frame_indx, receiver) in receivers.iter().enumerate() {
+            let (rendered_indx, frame) = receiver.recv().unwrap();
+            assert_eq!(frame_indx, rendered_indx);
             encoder
-                .encode(&receiver.recv().unwrap())
+                .encode(&frame)
                 .into_report()
                 .change_context(SceneRenderingError::EncodingError)
                 .attach_printable_lazy(|| "Failed to encode frame")?
@@ -167,18 +175,23 @@ impl Scene {
                     start = Instant::now();
                     encoded_at_start = encoded_count;
                 }
-                let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * ((max_frames as f64 / std::cmp::max(1, encoded_count - encoded_at_start) as f64) - 1.0));
+                let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * (((max_frames - encoded_at_start) as f64 / std::cmp::max(1, encoded_count - encoded_at_start) as f64) - 1.0).abs());
                 execute!(
                     std::io::stdout(),
                     BeginSynchronizedUpdate,
                     Hide,
                     MoveToPreviousLine(1),
                     SetForegroundColor(Color::Blue),
-                    Print(format!("Finished rendering frames, still encoding video:")),
-                    SetForegroundColor(Color::Green),
-                    Print(format!(" ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
+                    Print(format!("Finished rendering frames, still encoding video")),
                     ResetColor,
-                    Print(format!("    Encoded {} / {} frames", encoded_count, max_frames)),
+                    Print(format!(" | Encoded {} / {} frames", encoded_count, max_frames)),
+                    SetForegroundColor(Color::Blue),
+                    Print(format!(" ({:.0}%)", (encoded_count as f64 / max_frames as f64) * 100.0)),
+                    ResetColor,
+                    Print(" | ".to_owned()),
+                    SetForegroundColor(Color::Green),
+                    Print(format!("ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
+                    ResetColor,
                     Print("\n".to_owned()),
                     //ScrollDown(3),
                     EndSynchronizedUpdate,
@@ -188,7 +201,7 @@ impl Scene {
                 .attach_printable_lazy(|| "Failed to execute crossterm").unwrap();
             } else if let Ok(rc) = rendered_count.read() {
                 let r_count = *rc.deref();
-                let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * ((max_frames as f64 / std::cmp::max(1, r_count) as f64) - 1.0));   //minus one bcs x*a - x = x(a - 1)
+                let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * ((max_frames as f64 / std::cmp::max(1, encoded_count) as f64) - 1.0));   //minus one bcs x*a - x = x(a - 1)
                 execute!(
                     std::io::stdout(),
                     BeginSynchronizedUpdate,
@@ -197,10 +210,15 @@ impl Scene {
                     Print(format!("Rendered frame {}/{}", r_count, max_frames)),
                     SetForegroundColor(Color::Blue),
                     Print(format!(" ({:.0}%)", (r_count as f64 / max_frames as f64) * 100.0)),
-                    SetForegroundColor(Color::Green),
-                    Print(format!(" ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
                     ResetColor,
-                    Print(format!("    Encoded {} / {} frames", encoded_count, max_frames)),
+                    Print(format!(" | Encoded {} / {} frames", encoded_count, max_frames)),
+                    SetForegroundColor(Color::Blue),
+                    Print(format!(" ({:.0}%)", (encoded_count as f64 / max_frames as f64) * 100.0)),
+                    ResetColor,
+                    Print(" | ".to_owned()),
+                    SetForegroundColor(Color::Green),
+                    Print(format!("ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
+                    ResetColor,
                     Print("\n".to_owned()),
                     EndSynchronizedUpdate,
                 )
@@ -309,12 +327,14 @@ impl Scene {
                 .attach_printable_lazy(|| "Failed to create output directory")?;
         }
         //Generate an unused filename
-        let mut output_filename = "./output/scene_0.h264".to_owned();
+        let mut output_filename = "./output/scene_0.mp4".to_owned();
         let mut i = 1;
         while Path::new(&output_filename).exists() {
-            output_filename = format!("./output/scene_{}.h264", i);
+            output_filename = format!("./output/scene_{}.mp4", i);
             i += 1;
         }
+        let mut output_filename = std::path::PathBuf::from(output_filename);
+        output_filename.set_extension("h264");
         //Use this command (add formatting)
         //self.run_ffmpeg_cmd(output_filename)
         let file = std::fs::File::create(&output_filename);
@@ -335,18 +355,39 @@ impl Scene {
             .attach_printable_lazy(|| "Failed to convert current directory to string")?
             .to_owned();
 
+        let mut temp_mp4_path = path.clone().display().to_string();
+        temp_mp4_path = temp_mp4_path.replace(".h264", "_temp.mp4");
         let mut mp4_path = path.clone();
         mp4_path.set_extension("mp4");
 
-        Command::new("ffmpeg")
-            .current_dir(glob_path)
+        let mut cmd = Command::new("ffmpeg")
+            .current_dir(glob_path.clone())
             .arg("-i")
             .arg(format!("{}", path.display()))
-            .arg(format!("{}", mp4_path.display()))
+            .arg(format!("{}", temp_mp4_path))
             .spawn()
             .into_report()
             .change_context(SceneRenderingError::FFMPEGError)
             .attach_printable_lazy(|| "Failed to convert video file")?;
+        cmd.wait().unwrap();
+
+        let mut cmd = Command::new("ffmpeg")
+            .current_dir(glob_path)
+            .arg("-i")
+            .arg(temp_mp4_path.clone())
+            .arg("-vf")
+            .arg(format!("setpts={}*PTS", (30.0 / self.fps as f64) * LENGTH_ADJUSTMENT_FACTOR))
+            .arg("-r")
+            .arg(format!("{}", self.fps))
+            .arg(mp4_path.display().to_string())
+            .spawn()
+            .into_report()
+            .change_context(SceneRenderingError::FFMPEGError)
+            .attach_printable_lazy(|| "Failed to adjust speed of video file")?;
+        cmd.wait().unwrap();
+
+        std::fs::remove_file(temp_mp4_path).unwrap();
+        std::fs::remove_file(path).unwrap();
 
         //ffmpeg -reinit_filter 0 -f concat -safe 0 -i "frames/dict.txt" -vf "scale=1280:720:force_original_aspect_ratio=decrease:eval=frame,pad=1280:720:-1:-1:color=black:eval=frame,settb=AVTB,setpts=0.033333333*N/TB,format=yuv420p" -r 30 -movflags +faststart output.mp4
 
@@ -384,7 +425,7 @@ impl Scene {
         Ok(())
     }
     pub fn render(&self) -> Result<(), SceneRenderingError> {
-        ffmpeg_sidecar::download::auto_download();
+        ffmpeg_sidecar::download::auto_download().unwrap();
         let bytes = self
             .render_frames()
             .attach_printable_lazy(|| "Failed to render frames")?;
@@ -401,7 +442,6 @@ pub struct SceneBuilder {
     resolution: Option<Point<usize>>,
     fps: Option<usize>,
     length: Option<Duration>,
-    output_filename: Option<PathBuf>,
     rate_control_mode: RateControlMode,
 }
 
@@ -419,14 +459,7 @@ impl SceneBuilder {
         self
     }
     pub fn with_length(&mut self, length: Duration) -> &mut Self {
-        self.length = Some(Duration::from_secs_f64(length.as_secs_f64() * 250.0 / 295.0));
-        self
-    }
-    pub fn with_output_filename<P: AsRef<Path> + ?Sized>(
-        &mut self,
-        output_filename: &P,
-    ) -> &mut Self {
-        self.output_filename = Some(output_filename.as_ref().to_path_buf());
+        self.length = Some(Duration::from_secs_f64(length.as_secs_f64()));
         self
     }
     pub fn add_child(&mut self, child: Renderable) -> &mut Self {
@@ -458,10 +491,6 @@ impl SceneBuilder {
             err = true;
             report = report.attach_printable("No length was set");
         }
-        if self.output_filename.is_none() {
-            err = true;
-            report = report.attach_printable("No output filename was set");
-        }
         if err {
             return report;
         }
@@ -471,7 +500,6 @@ impl SceneBuilder {
             resolution: self.resolution.unwrap(),
             fps: self.fps.unwrap(),
             length: std::mem::replace(&mut self.length, None).unwrap(),
-            output_filename: std::mem::replace(&mut self.output_filename, None).unwrap(),
             rate_control_mode: self.rate_control_mode,
         })
     }
