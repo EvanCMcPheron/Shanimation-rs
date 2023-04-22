@@ -15,13 +15,13 @@ pub enum RenderableImageError {
 
 pub struct RendreableImage {
     image: RgbaImage,
-    process: Box<dyn Fn(&mut RgbaImage, &mut RenderableParams, std::time::Duration)>,
+    process: Box<dyn Fn(&mut RgbaImage, &mut RenderableParams, std::time::Duration) + Send + Sync>,
 }
 
 impl RendreableImage {
     pub fn new<P: AsRef<Path> + ?Sized>(
         path: &P,
-        process: Box<dyn Fn(&mut RgbaImage, &mut RenderableParams, std::time::Duration)>,
+        process: Box<dyn Fn(&mut RgbaImage, &mut RenderableParams, std::time::Duration) + Send + Sync>,
     ) -> Result<Self, RenderableImageError> {
         let image = Reader::open(path)
             .into_report()

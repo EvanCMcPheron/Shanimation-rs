@@ -9,7 +9,7 @@ use std::time::Duration;
 
 pub mod renderable_image;
 
-pub trait Behaviour {
+pub trait Behaviour: Send + Sync {
     fn process(&mut self, renderable: &mut RenderableParams, time: Duration);
     fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
 }

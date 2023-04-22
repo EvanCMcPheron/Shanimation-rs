@@ -5,6 +5,7 @@ use image::Rgba;
 use std::fs::DirBuilder;
 use std::io::Write;
 
+use std::ops::{Add, AddAssign, Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
@@ -36,8 +37,10 @@ use crossterm::{
     },
     cursor::{
         Hide,
+        MoveToPreviousLine,
     }
 };
+use std::cmp::{max, min};
 use std::time::Instant;
 
 #[derive(Clone)]
@@ -71,6 +74,7 @@ pub enum SceneRenderingError {
     Crossterm,
 }
 
+#[derive(Clone)]
 pub struct Scene {
     children: Vec<Arc<RwLock<Renderable>>>,
     resolution: Point<usize>,
@@ -118,36 +122,23 @@ impl Scene {
         .into_report()
         .change_context(SceneRenderingError::EncodingError)
         .attach_printable_lazy(|| "Failed to create encoder")?;
-        let start = Instant::now();
+        let mut start = Instant::now();
+        let tp = threadpool::ThreadPool::new(8);
+        let mut receivers = vec![];
+        let mut encoded_count = 0;
+        let rendered_count = Arc::new(RwLock::new(0));
         //for each frame, run render frame
         for (frame_indx, time) in (0..max_frames)
             .map(|i| Duration::from_secs_f64(i as f64 * seconds_per_frame))
             .enumerate()
         {
-            let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * ((max_frames as f64 / std::cmp::max(1, frame_indx) as f64) - 1.0));   //minus one bcs x*a - x = x(a - 1)
-            execute!(
-                std::io::stdout(),
-                BeginSynchronizedUpdate,
-                Hide,
-                Print(format!("Rendering frame {}/{}", frame_indx, max_frames)),
-                SetForegroundColor(Color::Blue),
-                Print(format!(" ({:.0}%)", (frame_indx as f64 / max_frames as f64) * 100.0)),
-                SetForegroundColor(Color::Green),
-                Print(format!(" ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
-                ResetColor,
-                Print("...\n".to_owned()),
-                //ScrollDown(3),
-                EndSynchronizedUpdate,
-            )
-            .into_report()
-            .change_context(SceneRenderingError::Crossterm)
-            .attach_printable_lazy(|| "Failed to execute crossterm")?;
-        
-
-            //TODO: Potentially introduce a threadpool here to 'concurrently' render all frames
-            encoder
-                .encode(&rgba_to_yuv(
-                    self.render_frame(frame_indx, time)
+            let cloned_scene = self.clone();
+            let cloned_count = rendered_count.clone();
+            let (sender, rec) = std::sync::mpsc::channel();
+            receivers.push(rec);
+            tp.execute(move || {
+                sender.send(rgba_to_yuv(
+                    cloned_scene.render_frame(frame_indx, time)
                         .change_context(SceneRenderingError::FrameRenderingError)
                         .attach_printable_lazy(|| {
                             format!(
@@ -155,12 +146,69 @@ impl Scene {
                                 frame_indx,
                                 time.as_secs_f64()
                             )
-                        })?,
-                ))
+                        }).unwrap()
+                )).expect("Failed to send frame through mpsc channel");
+                *cloned_count.write().unwrap().deref_mut() += 1;
+            });
+        }
+        let mut has_finished_frames = false;
+        let mut encoded_at_start = 0;
+        for (frame_indx, receiver) in receivers.iter().enumerate() {
+            encoder
+                .encode(&receiver.recv().unwrap())
                 .into_report()
                 .change_context(SceneRenderingError::EncodingError)
                 .attach_printable_lazy(|| "Failed to encode frame")?
                 .write_vec(&mut video_bytes);
+            encoded_count += 1;    
+            if tp.active_count() == 0 {
+                if has_finished_frames == false {
+                    has_finished_frames = true;
+                    start = Instant::now();
+                    encoded_at_start = encoded_count;
+                }
+                let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * ((max_frames as f64 / std::cmp::max(1, encoded_count - encoded_at_start) as f64) - 1.0));
+                execute!(
+                    std::io::stdout(),
+                    BeginSynchronizedUpdate,
+                    Hide,
+                    MoveToPreviousLine(1),
+                    SetForegroundColor(Color::Blue),
+                    Print(format!("Finished rendering frames, still encoding video:")),
+                    SetForegroundColor(Color::Green),
+                    Print(format!(" ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
+                    ResetColor,
+                    Print(format!("    Encoded {} / {} frames", encoded_count, max_frames)),
+                    Print("\n".to_owned()),
+                    //ScrollDown(3),
+                    EndSynchronizedUpdate,
+                )
+                .into_report()
+                .change_context(SceneRenderingError::Crossterm)
+                .attach_printable_lazy(|| "Failed to execute crossterm").unwrap();
+            } else if let Ok(rc) = rendered_count.read() {
+                let r_count = *rc.deref();
+                let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * ((max_frames as f64 / std::cmp::max(1, r_count) as f64) - 1.0));   //minus one bcs x*a - x = x(a - 1)
+                execute!(
+                    std::io::stdout(),
+                    BeginSynchronizedUpdate,
+                    Hide,
+                    MoveToPreviousLine(1),
+                    Print(format!("Rendered frame {}/{}", r_count, max_frames)),
+                    SetForegroundColor(Color::Blue),
+                    Print(format!(" ({:.0}%)", (r_count as f64 / max_frames as f64) * 100.0)),
+                    SetForegroundColor(Color::Green),
+                    Print(format!(" ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
+                    ResetColor,
+                    Print(format!("    Encoded {} / {} frames", encoded_count, max_frames)),
+                    Print("\n".to_owned()),
+                    EndSynchronizedUpdate,
+                )
+                .into_report()
+                .change_context(SceneRenderingError::Crossterm)
+                .attach_printable_lazy(|| "Failed to execute crossterm").unwrap();
+            }
+            
         }
         Ok(video_bytes)
     }
@@ -169,7 +217,6 @@ impl Scene {
         frame_indx: usize,
         time: Duration,
     ) -> Result<RgbaImage, SceneRenderingError> {
-        use std::cmp::{max, min};
         //create an empty rgba image buffer
         let mut img_buffer = Img::new(self.resolution);
         //'recursively' iterate through all children of the scene, and their children, (run from top down)
