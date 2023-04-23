@@ -22,8 +22,8 @@ pub struct Renderable {
 pub struct RenderableParams {
     children: Vec<Arc<RwLock<Renderable>>>,
     pub scale: Point<f64>,
-    pub position: Point<isize>,
-    pub dimensions: Point<usize>,
+    pub position: Point<f64>,
+    pub size: Point<f64>,
 }
 
 impl RenderableParams {
@@ -73,8 +73,8 @@ impl Renderable {
         RenderableBuilder {
             scale: Point::new(1.0, 1.0),
             children: vec![],
-            position: Some(Point::new(0, 0)),
-            dimensions: Some(Point::new(1280, 720)),
+            position: Some(Point::new(0.0, 0.0)),
+            size: Some(Point::new(1.0, 1.0)),
             behaviour: None,
         }
     }
@@ -86,9 +86,9 @@ pub struct RenderableBuilderError;
 
 pub struct RenderableBuilder {
     children: Vec<Arc<RwLock<Renderable>>>,
-    position: Option<Point<isize>>,
+    position: Option<Point<f64>>,
     scale: Point<f64>,
-    dimensions: Option<Point<usize>>,
+    size: Option<Point<f64>>,
     behaviour: Option<Box<dyn Behaviour>>,
 }
 
@@ -97,12 +97,12 @@ impl RenderableBuilder {
         self.children.push(Arc::new(RwLock::new(child)));
         self
     }
-    pub fn with_position(&mut self, position: Point<isize>) -> &mut Self {
+    pub fn with_position(&mut self, position: Point<f64>) -> &mut Self {
         self.position = Some(position);
         self
     }
-    pub fn with_dimensions(&mut self, dimensions: Point<usize>) -> &mut Self {
-        self.dimensions = Some(dimensions);
+    pub fn with_size(&mut self, size: Point<f64>) -> &mut Self {
+        self.size = Some(size);
         self
     }
     pub fn with_behaviour<'b>(&mut self, behaviour: Box<dyn Behaviour>) -> &mut Self {
@@ -120,9 +120,9 @@ impl RenderableBuilder {
             err = true;
             report = report.attach_printable("No position was set");
         }
-        if self.dimensions.is_none() {
+        if self.size.is_none() {
             err = true;
-            report = report.attach_printable("No dimensions were set");
+            report = report.attach_printable("No size were set");
         }
         if self.behaviour.is_none() {
             err = true;
@@ -150,7 +150,7 @@ impl RenderableBuilder {
                 children: std::mem::replace(&mut self.children, vec![]),
                 scale: self.scale,
                 position: self.position.unwrap(),
-                dimensions: self.dimensions.unwrap(),
+                size: self.size.unwrap(),
             },
             behaviour: std::mem::replace(&mut self.behaviour, Some(Box::new(DummyBehaviour)))
                 .unwrap(),

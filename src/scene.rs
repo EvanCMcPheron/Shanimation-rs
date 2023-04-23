@@ -92,7 +92,7 @@ impl Scene {
             resolution: Some(Point::new(1280, 720)),
             fps: Some(30),
             length: None,
-            rate_control_mode: RateControlMode::Bufferbased,
+            rate_control_mode: RateControlMode::Off,
         }
     }
     pub fn get_children(&self) -> &Vec<Arc<RwLock<Renderable>>> {
@@ -256,8 +256,8 @@ impl Scene {
 
             //This should be passed down to children AND used for coordinate calculations
             let next_offset = Point::new(
-                residual_offset.x + (child.params.position.x as f64 * residual_scale.x) as isize,
-                residual_offset.y + (child.params.position.y as f64 * residual_scale.y) as isize,
+                residual_offset.x + (child.params.position.x as f64 * residual_scale.x * self.resolution.x as f64) as isize,
+                residual_offset.y + (child.params.position.y as f64 * residual_scale.y * self.resolution.y as f64) as isize,
             );
 
             child
@@ -270,8 +270,8 @@ impl Scene {
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
             let up_left_unchecked = Point::new(next_offset.x, next_offset.y);
             let down_right_unchecked = Point::new(
-                up_left_unchecked.x + ((child.params.dimensions.x as f64 * next_scale.x) as isize),
-                up_left_unchecked.y + ((child.params.dimensions.y as f64 * next_scale.y) as isize),
+                up_left_unchecked.x + ((child.params.size.x * next_scale.x * self.resolution.x as f64) as isize),
+                up_left_unchecked.y + ((child.params.size.y * next_scale.y * self.resolution.y as f64) as isize),
             );
             let up_left = Point::new(max(up_left_unchecked.x, 0), max(up_left_unchecked.y, 0));
             let down_right = Point::new(
