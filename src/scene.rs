@@ -1,7 +1,4 @@
-use error_stack::{IntoReport, Report, Result, ResultExt};
-use error_stack_derive::ErrorStack;
-
-use image::Rgba;
+use super::prelude::*;
 use std::fs::DirBuilder;
 use std::io::Write;
 
@@ -13,9 +10,7 @@ use std::time::Duration;
 
 use super::encoding::rgba_to_yuv;
 
-use super::renderable::*;
-use super::Point;
-use super::RateControlMode;
+use crate::encoding::RateControlMode;
 use image::RgbaImage;
 use openh264::encoder::{Encoder, EncoderConfig};
 
@@ -536,10 +531,6 @@ pub struct SceneBuilder {
 }
 
 impl SceneBuilder {
-    pub fn with_rate_control_mode(&mut self, mode: RateControlMode) -> &mut Self {
-        self.rate_control_mode = mode;
-        self
-    }
     pub fn with_resolution(&mut self, resolution: Point<usize>) -> &mut Self {
         self.resolution = Some(resolution);
         self

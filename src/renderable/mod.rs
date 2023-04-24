@@ -1,9 +1,4 @@
-use super::scene::Img;
-pub use super::Point;
-use error_stack::{Report, Result, ResultExt};
-use error_stack_derive::ErrorStack;
-pub use image::Rgba;
-
+use super::prelude::*;
 use dyn_clone::{clone_trait_object, DynClone};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -113,20 +108,20 @@ impl RenderableBuilder {
         self.children.push(Arc::new(RwLock::new(child)));
         self
     }
-    pub fn with_position(&mut self, position: Point<f64>) -> &mut Self {
-        self.position = Some(position);
+    pub fn with_position(&mut self, x: f64, y: f64) -> &mut Self {
+        self.position = Some(Point::new(x, y));
         self
     }
-    pub fn with_size(&mut self, size: Point<f64>) -> &mut Self {
-        self.size = Some(size);
+    pub fn with_size(&mut self, x: f64, y: f64) -> &mut Self {
+        self.size = Some(Point::new(x, y));
         self
     }
     pub fn with_behaviour(&mut self, behaviour: Box<dyn Behaviour>) -> &mut Self {
         self.behaviour = Some(behaviour);
         self
     }
-    pub fn with_scale(&mut self, scale: Point<f64>) -> &mut Self {
-        self.scale = scale;
+    pub fn with_scale(&mut self, x: f64, y: f64) -> &mut Self {
+        self.scale = Point::new(x, y);
         self
     }
     pub fn build(&mut self) -> Result<Renderable, RenderableBuilderError> {

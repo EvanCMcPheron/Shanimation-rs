@@ -1,11 +1,7 @@
 use error_stack::{Result, ResultExt};
 use error_stack_derive::ErrorStack;
 
-use shanimation_rs::{
-    renderable::{Behaviour, Renderable, RenderableParams, Rgba, closure_renderable::ClosureRenderable},
-    scene::{Img, Scene},
-    Point,
-};
+use shanimation_rs::prelude::*;
 use std::time::Duration;
 
 
@@ -16,8 +12,8 @@ pub struct MainError;
 
 fn main() -> Result<(), MainError> {
     let main_renderable = Renderable::builder()
-        .with_position(Point::new(0.1, 0.1))
-        .with_size(Point::new(0.3, 0.3))
+        .with_position(0.1, 0.1)
+        .with_size(0.3, 0.3)
         .with_behaviour(Box::new(ClosureRenderable {
             data: (),
             process: |data, params, time| {
@@ -33,7 +29,7 @@ fn main() -> Result<(), MainError> {
 
     Scene::builder()
         .with_length(Duration::from_secs(10))
-        .with_resolution(Point::new(1920, 1080))
+        .with_resolution(RESOLUTION_1080P)
         .with_fps(60)
         .add_child(main_renderable)
         .build()
