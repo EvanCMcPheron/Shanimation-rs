@@ -7,6 +7,7 @@ use shanimation_rs::{
     },
     scene::{Img, Scene},
     Point,
+    resolution_consts,
 };
 use std::time::Duration;
 
