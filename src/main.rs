@@ -15,7 +15,7 @@ struct BasicShader;
 
 impl Behaviour for BasicShader {
     fn process(&mut self, params: &mut RenderableParams, _time: Duration) {
-        params.position.x += ((_time.as_secs_f64()).cos() * 10.0) as isize;
+        params.position.x += (_time.as_secs_f64()).cos() * 0.005;
     }
     fn get_pixel(&self, _current_frame: &Img, uv_coords: Point<f64>, _time: Duration) -> Rgba<u8> {
         Rgba([
@@ -60,20 +60,20 @@ fn main() -> Result<(), MainError> {
     .with_fps(60)
     .add_child(
         Renderable::builder()
-            .with_position(Point::new(200, 150))
-            .with_dimensions(Point::new(700, 500))
+            .with_position(Point::new(0.1, 0.1))
+            .with_size(Point::new(0.35, 0.5))
             .with_behaviour(Box::new(BasicShader))
             .add_child(
                 Renderable::builder()
-                    .with_position(Point::new(50, 50))
-                    .with_dimensions(Point::new(500, 400))
+                    .with_position(Point::new(0.05, 0.02))
+                    .with_size(Point::new(0.26, 0.4))
                     .with_behaviour(Box::new(
                         RendreableImage::new("TestImage.png", Box::new(|_, _, _| {})).unwrap(),
                     ))
                     .add_child(
                         Renderable::builder()
-                            .with_position(Point::new(50, 0))
-                            .with_dimensions(Point::new(100, 400))
+                            .with_position(Point::new(0.05, 0.0))
+                            .with_size(Point::new(0.05, 0.4))
                             .with_behaviour(Box::new(RedRect))
                             .build()
                             .unwrap(),
