@@ -10,7 +10,6 @@ pub mod prelude {
 }
 
 pub mod encoding;
-mod frame_dictionary;
 pub mod point;
 pub mod renderable;
 pub mod resolution_consts;
