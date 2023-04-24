@@ -5,14 +5,14 @@ use image::Rgba;
 use std::fs::DirBuilder;
 use std::io::Write;
 
-use std::ops::{Add, AddAssign, Deref, DerefMut};
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use super::encoding::rgba_to_yuv;
-use super::frame_dictionary::FrameDict;
+
 use super::renderable::*;
 use super::Point;
 use super::RateControlMode;
@@ -24,7 +24,7 @@ use crossterm::{
     execute,
     style::{Color, Print, ResetColor, SetForegroundColor},
     terminal::{
-        BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate, ScrollDown, ScrollUp,
+        BeginSynchronizedUpdate, EndSynchronizedUpdate,
     },
 };
 use std::cmp::{max, min};
@@ -313,7 +313,7 @@ impl Scene {
     }
     fn render_frame(
         &self,
-        frame_indx: usize,
+        _frame_indx: usize,
         time: Duration,
     ) -> Result<RgbaImage, SceneRenderingError> {
         //create an empty rgba image buffer
@@ -424,7 +424,7 @@ impl Scene {
         output_filename.set_extension("h264");
         //Use this command (add formatting)
         //self.run_ffmpeg_cmd(output_filename)
-        let file = std::fs::File::create(&output_filename);
+        let _file = std::fs::File::create(&output_filename);
         std::fs::write(&output_filename, bytes)
             .into_report()
             .change_context(SceneRenderingError::FileWritingError)

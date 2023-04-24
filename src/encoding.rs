@@ -1,9 +1,8 @@
 use core::slice::SlicePattern;
 
-use image::{Rgb, RgbImage, Rgba, RgbaImage};
+use image::{Rgb, RgbImage, RgbaImage};
 pub use openh264::encoder::RateControlMode;
 use openh264::{
-    encoder::{EncodedBitStream, Encoder, EncoderConfig},
     formats::YUVBuffer,
 };
 

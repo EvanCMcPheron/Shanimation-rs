@@ -8,6 +8,8 @@ use dyn_clone::{clone_trait_object, DynClone};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+pub mod closure_renderable;
+
 pub trait Behaviour: DynClone + Send + Sync {
     fn process(&mut self, renderable: &mut RenderableParams, time: Duration);
     fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
@@ -119,7 +121,7 @@ impl RenderableBuilder {
         self.size = Some(size);
         self
     }
-    pub fn with_behaviour<'b>(&mut self, behaviour: Box<dyn Behaviour>) -> &mut Self {
+    pub fn with_behaviour(&mut self, behaviour: Box<dyn Behaviour>) -> &mut Self {
         self.behaviour = Some(behaviour);
         self
     }
