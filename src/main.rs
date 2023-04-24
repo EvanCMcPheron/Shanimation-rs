@@ -14,7 +14,7 @@ struct BasicShader;
 
 impl Behaviour for BasicShader {
     fn process(&mut self, params: &mut RenderableParams, _time: Duration) {
-        params.position.x += _time.as_secs_f64().cos() * 0.1;
+        params.position.x += _time.as_secs_f64().cos() * 0.005;
     }
     fn get_pixel(&self, _current_frame: &Img, uv_coords: Point<f64>, _time: Duration) -> Rgba<u8> {
         Rgba([

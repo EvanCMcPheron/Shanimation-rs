@@ -75,7 +75,9 @@ pub struct Scene {
 impl Scene {
     pub fn clone_entire(&self) -> Self {
         let mut new_self = self.clone();
-        let children = self.children.iter()
+        let children = self
+            .children
+            .iter()
             .map(|c| c.read().unwrap().clone_entire())
             .map(|c| Arc::new(RwLock::new(c)))
             .collect::<Vec<_>>();
@@ -107,6 +109,7 @@ impl Scene {
     }
 
     fn render_frames(&self) -> Result<Vec<u8>, SceneRenderingError> {
+        println!("Rendering video...\n");
         //figure out frame count, with matching duration to send to behaviour and shader
         let max_frames = self.length.as_secs() as usize * self.fps;
         let seconds_per_frame = 1.0 / self.fps as f64;
@@ -129,6 +132,35 @@ impl Scene {
             .map(|i| Duration::from_secs_f64(i as f64 * seconds_per_frame))
             .enumerate()
         {
+            execute!(
+                std::io::stdout(),
+                BeginSynchronizedUpdate,
+                Hide,
+                MoveToPreviousLine(1),
+                SetForegroundColor(Color::Blue),
+                Print(format!("Runnning Behaviours")),
+                ResetColor,
+                Print(format!(
+                    " | Processed {} / {} frames",
+                    frame_indx, max_frames
+                )),
+                SetForegroundColor(Color::Blue),
+                Print(format!(
+                    " ({:.0}%)",
+                    (frame_indx as f64 / max_frames as f64) * 100.0
+                )),
+                ResetColor,
+                Print(" | ".to_owned()),
+                ResetColor,
+                Print("\n".to_owned()),
+                //ScrollDown(3),
+                EndSynchronizedUpdate,
+            )
+            .into_report()
+            .change_context(SceneRenderingError::Crossterm)
+            .attach_printable_lazy(|| "Failed to execute crossterm")
+            .unwrap();
+            self.run_behaviours(time);
             let cloned_scene = self.clone_entire();
             let cloned_count = rendered_count.clone();
             let (sender, rec) = std::sync::mpsc::channel();
@@ -261,6 +293,24 @@ impl Scene {
         }
         Ok(video_bytes)
     }
+    fn run_behaviours(&self, time: Duration) {
+        let mut stack: Vec<Arc<RwLock<Renderable>>> = vec![]; //(offset, child)
+        self.children
+            .iter()
+            .map(Clone::clone)
+            .for_each(|v| stack.push(v));
+        //for each child, run their run their behaviour's process, then for every pixel, run their get_pixel (THIS CAN EASILY BE PARRELLELIZED) and overide the pixel on the main image buffer'
+        while let Some(child) = stack.pop() {
+            let mut child = child.write().unwrap();
+            child.run_behaviour(time);
+            child
+                .params
+                .get_children()
+                .iter()
+                .map(Clone::clone)
+                .for_each(|c| stack.push(c));
+        }
+    }
     fn render_frame(
         &self,
         frame_indx: usize,
@@ -278,7 +328,7 @@ impl Scene {
         //for each child, run their run their behaviour's process, then for every pixel, run their get_pixel (THIS CAN EASILY BE PARRELLELIZED) and overide the pixel on the main image buffer'
         while let Some((residual_offset, residual_scale, child)) = stack.pop() {
             let mut child = child.write().unwrap();
-            child.run_behaviour(time);
+            //child.run_behaviour(time);
 
             // This scale should be multiplied against the dimensions when calculating the bottom right point (and also get passed to children), but only residual scale should be applied to the top left point.
             let next_scale = Point::new(

@@ -1,7 +1,7 @@
 use fast_inv_sqrt::InvSqrt64;
 use num_traits::{float::Float, Num};
-use std::ops::*;
 use std::fmt::{Display, Formatter};
+use std::ops::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Point<T: Display + Num + Copy> {
@@ -14,7 +14,6 @@ impl<T: Display + Num + Copy> Display for Point<T> {
         write!(f, "({}, {})", self.x, self.y)
     }
 }
-
 
 impl<T: Display + Num + Copy> Point<T> {
     pub fn new(x: T, y: T) -> Self {
