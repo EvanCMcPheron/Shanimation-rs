@@ -4,21 +4,23 @@ use error_stack::{Report, Result, ResultExt};
 use error_stack_derive::ErrorStack;
 pub use image::Rgba;
 
+use dyn_clone::{clone_trait_object, DynClone};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-pub mod renderable_image;
-
-pub trait Behaviour: Send + Sync {
+pub trait Behaviour: DynClone + Send + Sync {
     fn process(&mut self, renderable: &mut RenderableParams, time: Duration);
     fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
 }
+clone_trait_object!(Behaviour);
 
+#[derive(Clone)]
 pub struct Renderable {
     pub params: RenderableParams,
     behaviour: Box<dyn Behaviour>,
 }
 
+#[derive(Clone)]
 pub struct RenderableParams {
     children: Vec<Arc<RwLock<Renderable>>>,
     pub scale: Point<f64>,
@@ -45,6 +47,18 @@ impl RenderableParams {
 }
 
 impl Renderable {
+    pub fn clone_entire(&self) -> Self {
+        let children = self
+            .params
+            .get_children()
+            .iter()
+            .map(|child| child.read().unwrap().clone_entire())
+            .map(|child| Arc::new(RwLock::new(child)))
+            .collect::<Vec<_>>();
+        let mut new_self = self.clone();
+        new_self.params.children = children;
+        new_self
+    }
     pub fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
         self.params.add_child(child);
     }
@@ -132,6 +146,7 @@ impl RenderableBuilder {
             return report;
         }
 
+        #[derive(Clone)]
         struct DummyBehaviour;
         impl Behaviour for DummyBehaviour {
             fn process(&mut self, _: &mut RenderableParams, _: Duration) {}

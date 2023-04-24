@@ -2,20 +2,19 @@ use error_stack::{Result, ResultExt};
 use error_stack_derive::ErrorStack;
 
 use shanimation_rs::{
-    renderable::{
-        renderable_image::RendreableImage, Behaviour, Renderable, RenderableParams, Rgba,
-    },
+    renderable::{Behaviour, Renderable, RenderableParams, Rgba},
+    resolution_consts,
     scene::{Img, Scene},
     Point,
-    resolution_consts,
 };
 use std::time::Duration;
 
+#[derive(Clone)]
 struct BasicShader;
 
 impl Behaviour for BasicShader {
     fn process(&mut self, params: &mut RenderableParams, _time: Duration) {
-        params.position.x += (_time.as_secs_f64()).cos() * 0.005;
+        params.position.x += _time.as_secs_f64().cos() * 0.1;
     }
     fn get_pixel(&self, _current_frame: &Img, uv_coords: Point<f64>, _time: Duration) -> Rgba<u8> {
         Rgba([
@@ -27,6 +26,7 @@ impl Behaviour for BasicShader {
     }
 }
 
+#[derive(Clone)]
 struct WhiteRect;
 
 impl Behaviour for WhiteRect {
@@ -36,6 +36,7 @@ impl Behaviour for WhiteRect {
     }
 }
 
+#[derive(Clone)]
 struct RedRect;
 
 impl Behaviour for RedRect {
@@ -55,40 +56,38 @@ pub enum MainError {
 
 fn main() -> Result<(), MainError> {
     Scene::builder()
-    .with_length(Duration::from_secs(10))
-    .with_resolution(Point::new(1920, 1080))
-    .with_fps(60)
-    .add_child(
-        Renderable::builder()
-            .with_position(Point::new(0.1, 0.1))
-            .with_size(Point::new(0.35, 0.5))
-            .with_behaviour(Box::new(BasicShader))
-            .add_child(
-                Renderable::builder()
-                    .with_position(Point::new(0.05, 0.02))
-                    .with_size(Point::new(0.26, 0.4))
-                    .with_behaviour(Box::new(
-                        RendreableImage::new("TestImage.png", Box::new(|_, _, _| {})).unwrap(),
-                    ))
-                    .add_child(
-                        Renderable::builder()
-                            .with_position(Point::new(0.05, 0.0))
-                            .with_size(Point::new(0.05, 0.4))
-                            .with_behaviour(Box::new(RedRect))
-                            .build()
-                            .unwrap(),
-                    )
-                    .build()
-                    .unwrap(),
-            )
-            .build()
-            .change_context(MainError::SceneCreation)
-            .attach_printable_lazy(|| "Failed to create renderable")?,
-    )
-    .build()
-    .change_context(MainError::SceneCreation)
-    .attach_printable_lazy(|| "Failed to create scene")?
-    .render()
-    .change_context(MainError::SceneRendering)?;
+        .with_length(Duration::from_secs(10))
+        .with_resolution(Point::new(1920, 1080))
+        .with_fps(60)
+        .add_child(
+            Renderable::builder()
+                .with_position(Point::new(0.1, 0.1))
+                .with_size(Point::new(0.35, 0.5))
+                .with_behaviour(Box::new(BasicShader))
+                .add_child(
+                    Renderable::builder()
+                        .with_position(Point::new(0.05, 0.02))
+                        .with_size(Point::new(0.26, 0.4))
+                        .with_behaviour(Box::new(WhiteRect))
+                        .add_child(
+                            Renderable::builder()
+                                .with_position(Point::new(0.05, 0.0))
+                                .with_size(Point::new(0.05, 0.4))
+                                .with_behaviour(Box::new(RedRect))
+                                .build()
+                                .unwrap(),
+                        )
+                        .build()
+                        .unwrap(),
+                )
+                .build()
+                .change_context(MainError::SceneCreation)
+                .attach_printable_lazy(|| "Failed to create renderable")?,
+        )
+        .build()
+        .change_context(MainError::SceneCreation)
+        .attach_printable_lazy(|| "Failed to create scene")?
+        .render()
+        .change_context(MainError::SceneRendering)?;
     Ok(())
 }

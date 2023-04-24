@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 crossterm = "0.26.1"
+dyn-clone = "1.0.11"
 error-stack = "0.3.1"
 error-stack-derive = "0.1.0"
 fast_inv_sqrt = "1.0.1"

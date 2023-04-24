@@ -20,30 +20,17 @@ use image::RgbaImage;
 use openh264::encoder::{Encoder, EncoderConfig};
 
 use crossterm::{
+    cursor::{Hide, MoveToPreviousLine},
     execute,
-    style::{
-        Print,
-        Color,
-        SetForegroundColor,
-        ResetColor
-    },
+    style::{Color, Print, ResetColor, SetForegroundColor},
     terminal::{
-        Clear,
-        ClearType,
-        BeginSynchronizedUpdate,
-        EndSynchronizedUpdate,
-        ScrollDown,
-        ScrollUp
+        BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate, ScrollDown, ScrollUp,
     },
-    cursor::{
-        Hide,
-        MoveToPreviousLine,
-    }
 };
 use std::cmp::{max, min};
 use std::time::Instant;
 
-const LENGTH_ADJUSTMENT_FACTOR: f64 = 5.0 / 6.0;//250.0 / 295.0;
+const LENGTH_ADJUSTMENT_FACTOR: f64 = 5.0 / 6.0; //250.0 / 295.0;
 
 #[derive(Clone)]
 pub struct Img {
@@ -86,6 +73,15 @@ pub struct Scene {
 }
 
 impl Scene {
+    pub fn clone_entire(&self) -> Self {
+        let mut new_self = self.clone();
+        let children = self.children.iter()
+            .map(|c| c.read().unwrap().clone_entire())
+            .map(|c| Arc::new(RwLock::new(c)))
+            .collect::<Vec<_>>();
+        new_self.children = children;
+        new_self
+    }
     pub fn builder() -> SceneBuilder {
         SceneBuilder {
             children: Some(vec![]),
@@ -109,7 +105,7 @@ impl Scene {
     pub fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
         self.children.push(child);
     }
-    
+
     fn render_frames(&self) -> Result<Vec<u8>, SceneRenderingError> {
         //figure out frame count, with matching duration to send to behaviour and shader
         let max_frames = self.length.as_secs() as usize * self.fps;
@@ -133,28 +129,29 @@ impl Scene {
             .map(|i| Duration::from_secs_f64(i as f64 * seconds_per_frame))
             .enumerate()
         {
-            let cloned_scene = self.clone();
+            let cloned_scene = self.clone_entire();
             let cloned_count = rendered_count.clone();
             let (sender, rec) = std::sync::mpsc::channel();
             receivers.push(rec);
             tp.execute(move || {
-                sender.send(
-                    (
+                sender
+                    .send((
                         frame_indx,
                         rgba_to_yuv(
-                    
-                        cloned_scene.render_frame(frame_indx, time)
-                        .change_context(SceneRenderingError::FrameRenderingError)
-                        .attach_printable_lazy(|| {
-                            format!(
-                                "Failed to render frame {} at time {} seconds",
-                                frame_indx,
-                                time.as_secs_f64()
-                            )
-                        }).unwrap()
-                    
-                ))
-                ).expect("Failed to send frame through mpsc channel");
+                            cloned_scene
+                                .render_frame(frame_indx, time)
+                                .change_context(SceneRenderingError::FrameRenderingError)
+                                .attach_printable_lazy(|| {
+                                    format!(
+                                        "Failed to render frame {} at time {} seconds",
+                                        frame_indx,
+                                        time.as_secs_f64()
+                                    )
+                                })
+                                .unwrap(),
+                        ),
+                    ))
+                    .expect("Failed to send frame through mpsc channel");
                 *cloned_count.write().unwrap().deref_mut() += 1;
             });
         }
@@ -169,14 +166,20 @@ impl Scene {
                 .change_context(SceneRenderingError::EncodingError)
                 .attach_printable_lazy(|| "Failed to encode frame")?
                 .write_vec(&mut video_bytes);
-            encoded_count += 1;    
+            encoded_count += 1;
             if tp.active_count() == 0 {
                 if has_finished_frames == false {
                     has_finished_frames = true;
                     start = Instant::now();
                     encoded_at_start = encoded_count;
                 }
-                let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * (((max_frames - encoded_at_start) as f64 / std::cmp::max(1, encoded_count - encoded_at_start) as f64) - 1.0).abs());
+                let eta = Duration::from_secs_f64(
+                    start.elapsed().as_secs_f64()
+                        * (((max_frames - encoded_at_start) as f64
+                            / std::cmp::max(1, encoded_count - encoded_at_start) as f64)
+                            - 1.0)
+                            .abs(),
+                );
                 execute!(
                     std::io::stdout(),
                     BeginSynchronizedUpdate,
@@ -185,13 +188,23 @@ impl Scene {
                     SetForegroundColor(Color::Blue),
                     Print(format!("Finished rendering frames, still encoding video")),
                     ResetColor,
-                    Print(format!(" | Encoded {} / {} frames", encoded_count, max_frames)),
+                    Print(format!(
+                        " | Encoded {} / {} frames",
+                        encoded_count, max_frames
+                    )),
                     SetForegroundColor(Color::Blue),
-                    Print(format!(" ({:.0}%)", (encoded_count as f64 / max_frames as f64) * 100.0)),
+                    Print(format!(
+                        " ({:.0}%)",
+                        (encoded_count as f64 / max_frames as f64) * 100.0
+                    )),
                     ResetColor,
                     Print(" | ".to_owned()),
                     SetForegroundColor(Color::Green),
-                    Print(format!("ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
+                    Print(format!(
+                        "ETA: {}:{}",
+                        eta.as_secs() / 60,
+                        eta.as_secs() % 60
+                    )),
                     ResetColor,
                     Print("\n".to_owned()),
                     //ScrollDown(3),
@@ -199,10 +212,14 @@ impl Scene {
                 )
                 .into_report()
                 .change_context(SceneRenderingError::Crossterm)
-                .attach_printable_lazy(|| "Failed to execute crossterm").unwrap();
+                .attach_printable_lazy(|| "Failed to execute crossterm")
+                .unwrap();
             } else if let Ok(rc) = rendered_count.read() {
                 let r_count = *rc.deref();
-                let eta = Duration::from_secs_f64(start.elapsed().as_secs_f64() * ((max_frames as f64 / std::cmp::max(1, encoded_count) as f64) - 1.0));   //minus one bcs x*a - x = x(a - 1)
+                let eta = Duration::from_secs_f64(
+                    start.elapsed().as_secs_f64()
+                        * ((max_frames as f64 / std::cmp::max(1, encoded_count) as f64) - 1.0),
+                ); //minus one bcs x*a - x = x(a - 1)
                 execute!(
                     std::io::stdout(),
                     BeginSynchronizedUpdate,
@@ -210,24 +227,37 @@ impl Scene {
                     MoveToPreviousLine(1),
                     Print(format!("Rendered frame {}/{}", r_count, max_frames)),
                     SetForegroundColor(Color::Blue),
-                    Print(format!(" ({:.0}%)", (r_count as f64 / max_frames as f64) * 100.0)),
+                    Print(format!(
+                        " ({:.0}%)",
+                        (r_count as f64 / max_frames as f64) * 100.0
+                    )),
                     ResetColor,
-                    Print(format!(" | Encoded {} / {} frames", encoded_count, max_frames)),
+                    Print(format!(
+                        " | Encoded {} / {} frames",
+                        encoded_count, max_frames
+                    )),
                     SetForegroundColor(Color::Blue),
-                    Print(format!(" ({:.0}%)", (encoded_count as f64 / max_frames as f64) * 100.0)),
+                    Print(format!(
+                        " ({:.0}%)",
+                        (encoded_count as f64 / max_frames as f64) * 100.0
+                    )),
                     ResetColor,
                     Print(" | ".to_owned()),
                     SetForegroundColor(Color::Green),
-                    Print(format!("ETA: {}:{}", eta.as_secs() / 60, eta.as_secs() % 60)),
+                    Print(format!(
+                        "ETA: {}:{}",
+                        eta.as_secs() / 60,
+                        eta.as_secs() % 60
+                    )),
                     ResetColor,
                     Print("\n".to_owned()),
                     EndSynchronizedUpdate,
                 )
                 .into_report()
                 .change_context(SceneRenderingError::Crossterm)
-                .attach_printable_lazy(|| "Failed to execute crossterm").unwrap();
+                .attach_printable_lazy(|| "Failed to execute crossterm")
+                .unwrap();
             }
-            
         }
         Ok(video_bytes)
     }
@@ -248,6 +278,7 @@ impl Scene {
         //for each child, run their run their behaviour's process, then for every pixel, run their get_pixel (THIS CAN EASILY BE PARRELLELIZED) and overide the pixel on the main image buffer'
         while let Some((residual_offset, residual_scale, child)) = stack.pop() {
             let mut child = child.write().unwrap();
+            child.run_behaviour(time);
 
             // This scale should be multiplied against the dimensions when calculating the bottom right point (and also get passed to children), but only residual scale should be applied to the top left point.
             let next_scale = Point::new(
@@ -257,8 +288,12 @@ impl Scene {
 
             //This should be passed down to children AND used for coordinate calculations
             let next_offset = Point::new(
-                residual_offset.x + (child.params.position.x * self.resolution.x as f64 * residual_scale.x) as isize,
-                residual_offset.y + (child.params.position.y * self.resolution.y as f64 * residual_scale.y) as isize,
+                residual_offset.x
+                    + (child.params.position.x * self.resolution.x as f64 * residual_scale.x)
+                        as isize,
+                residual_offset.y
+                    + (child.params.position.y * self.resolution.y as f64 * residual_scale.y)
+                        as isize,
             );
 
             child
@@ -267,12 +302,13 @@ impl Scene {
                 .map(Clone::clone)
                 .map(|c| (next_offset, next_scale, c))
                 .for_each(|c| stack.push(c));
-            child.run_behaviour(time);
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
             let up_left_unchecked = Point::new(next_offset.x, next_offset.y);
             let down_right_unchecked = Point::new(
-                up_left_unchecked.x + ((child.params.size.x * self.resolution.x as f64 *  next_scale.x) as isize),
-                up_left_unchecked.y + ((child.params.size.y * self.resolution.y as f64 * next_scale.y) as isize),
+                up_left_unchecked.x
+                    + ((child.params.size.x * self.resolution.x as f64 * next_scale.x) as isize),
+                up_left_unchecked.y
+                    + ((child.params.size.y * self.resolution.y as f64 * next_scale.y) as isize),
             );
             let up_left = Point::new(max(up_left_unchecked.x, 0), max(up_left_unchecked.y, 0));
             let down_right = Point::new(
@@ -377,7 +413,10 @@ impl Scene {
             .arg("-i")
             .arg(temp_mp4_path.clone())
             .arg("-vf")
-            .arg(format!("setpts={}*PTS", (30.0 / self.fps as f64) * LENGTH_ADJUSTMENT_FACTOR))
+            .arg(format!(
+                "setpts={}*PTS",
+                (30.0 / self.fps as f64) * LENGTH_ADJUSTMENT_FACTOR
+            ))
             .arg("-r")
             .arg(format!("{}", self.fps))
             .arg(mp4_path.display().to_string())

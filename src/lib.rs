@@ -8,5 +8,5 @@ pub mod encoding;
 pub mod frame_dictionary;
 pub mod point;
 pub mod renderable;
-pub mod scene;
 pub mod resolution_consts;
+pub mod scene;
