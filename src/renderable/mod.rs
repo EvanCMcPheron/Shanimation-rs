@@ -59,7 +59,7 @@ impl Renderable {
         self.params.get_children_mut()
     }
     pub fn run_shader(
-        &mut self,
+        &self,
         current_frame: &Img,
         uv_coords: Point<f64>,
         time: Duration,

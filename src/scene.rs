@@ -121,7 +121,8 @@ impl Scene {
         for (frame_indx, time) in (0..max_frames)
             .map(|i| Duration::from_secs_f64(i as f64 * seconds_per_frame))
             .enumerate()
-        {
+        {   
+            self.run_behaviours(time);
             let cloned_scene = self.clone();
             let (sender, rec) = std::sync::mpsc::channel();
             receivers.push(rec);
@@ -143,8 +144,6 @@ impl Scene {
                 sender.send(()).unwrap();
             });
         }
-        let mut has_finished_frames = false;
-        let mut encoded_at_start = 0;
         for (frame_indx, receiver) in receivers.iter().enumerate() {
             receiver.recv().unwrap();
             rendered_count += 1;    
@@ -175,6 +174,21 @@ impl Scene {
         }
         Ok(max_frames)
     }
+    fn run_behaviours(&self, time: Duration) {
+        let mut stack: Vec<Arc<RwLock<Renderable>>> = vec![];
+        self.children
+            .iter()
+            .map(Clone::clone)
+            .for_each(|c| stack.push(c));
+        while let Some(child) = stack.pop() {
+            let mut child = child.write().unwrap();
+            child.params.get_children()
+                .iter()
+                .map(Clone::clone)
+                .for_each(|v| stack.push(v));
+            child.run_behaviour(time);
+        }
+    }
     fn render_frame(
         &self,
         frame_indx: usize,
@@ -191,7 +205,7 @@ impl Scene {
             .for_each(|v| stack.push(v));
         //for each child, run their run their behaviour's process, then for every pixel, run their get_pixel (THIS CAN EASILY BE PARRELLELIZED) and overide the pixel on the main image buffer'
         while let Some((residual_offset, residual_scale, child)) = stack.pop() {
-            let mut child = child.write().unwrap();
+            let child = child.read().unwrap();
 
             // This scale should be multiplied against the dimensions when calculating the bottom right point (and also get passed to children), but only residual scale should be applied to the top left point.
             let next_scale = Point::new(
@@ -211,7 +225,7 @@ impl Scene {
                 .map(Clone::clone)
                 .map(|c| (next_offset, next_scale, c))
                 .for_each(|c| stack.push(c));
-            child.run_behaviour(time);
+            //child.run_behaviour(time);
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
             let up_left_unchecked = Point::new(next_offset.x, next_offset.y);
             let down_right_unchecked = Point::new(
@@ -280,10 +294,10 @@ impl Scene {
         }
         let mut output_filename = std::path::PathBuf::from(output_filename);
         
-        self.generate_frame_dictionary(max_frames);
+        self.generate_frame_dictionary(max_frames)?;
 
         //Use this command (add formatting)
-        self.run_ffmpeg_cmd(output_filename);
+        self.run_ffmpeg_cmd(output_filename)?;
         Ok(())
     }
     fn generate_frame_dictionary(&self, max_frames: usize) -> Result<(), SceneRenderingError> {
@@ -293,7 +307,7 @@ impl Scene {
             .attach_printable_lazy(|| "Failed to write to frame dictionary")?;
         std::fs::write("./frames/frame_dict.txt", 
             (0..max_frames)
-                .map(|v| format!("file './frames/frame_{}.png'\n", v))
+                .map(|v| format!("file 'frame_{}.png'\n", v))
                 .collect::<String>()
         )
         .into_report()
@@ -341,6 +355,8 @@ impl Scene {
             .current_dir(glob_path)
             .arg("-f")
             .arg("concat")
+            .arg("-safe")
+            .arg("0")
             .arg("-i")
             .arg("./frames/frame_dict.txt")
             .arg("-vf")
@@ -356,13 +372,13 @@ impl Scene {
             .attach_printable_lazy(|| "Failed to concatinate frames into video through ffmpeg")?
             .wait()
             .into_report()
+            .change_context(SceneRenderingError::FFMPEGError)
             .attach_printable_lazy(|| "Failed to wait for ffmpeg to finish")?;
 
-        std::fs::remove_dir_all("./frames")
+        /*std::fs::remove_dir_all("./frames")
             .into_report()
             .change_context(SceneRenderingError::FileWritingError)
-            .attach_printable_lazy(|| "Failed to remove frame directory")?;
-
+            .attach_printable_lazy(|| "Failed to remove frame directory")?;*/
         //ffmpeg -reinit_filter 0 -f concat -safe 0 -i "frames/dict.txt" -vf "scale=1280:720:force_original_aspect_ratio=decrease:eval=frame,pad=1280:720:-1:-1:color=black:eval=frame,settb=AVTB,setpts=0.033333333*N/TB,format=yuv420p" -r 30 -movflags +faststart output.mp4
 
         //ffmpeg -f concat -safe 0 -i "frames/dict.txt" -vf "setpts=0.033333333*N/TB" -r 30 -movflags +faststart output.mp4
@@ -399,13 +415,17 @@ impl Scene {
         Ok(())
     }
     pub fn render(&self) -> Result<(), SceneRenderingError> {
+        println!("\nRendering Scene...\n");
         ffmpeg_sidecar::download::auto_download().unwrap();
         if Path::new("./frames").exists() {
             std::fs::remove_dir_all("./frames").unwrap();
         }
         std::fs::DirBuilder::new()
             .recursive(true)
-            .create("./frames");
+            .create("./frames")
+            .into_report()
+            .change_context(SceneRenderingError::FileWritingError)
+            .attach_printable_lazy(|| "Failed to create frame directory")?;
         
         self.compile_video(self
             .render_frames()
