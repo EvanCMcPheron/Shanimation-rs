@@ -109,6 +109,7 @@ impl Scene {
     pub fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
         self.children.push(child);
     }
+    
     fn render_frames(&self) -> Result<Vec<u8>, SceneRenderingError> {
         //figure out frame count, with matching duration to send to behaviour and shader
         let max_frames = self.length.as_secs() as usize * self.fps;
