@@ -12,7 +12,7 @@ pub struct MainError;
 
 fn main() -> Result<(), MainError> {
     let main_renderable = Renderable::builder()
-        .with_position(0.2, 0.5)
+        .with_position(0.2, 0.2)
         .with_size(0.1, 0.4)
         .with_rotation(2.0)
         .with_behaviour(Box::new(ClosureRenderable {

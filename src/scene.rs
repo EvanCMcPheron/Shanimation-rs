@@ -399,9 +399,11 @@ impl Scene {
                 .for_each(|p| {
                     let uv = to_uv(up_left_unchecked, down_right_unchecked, p)
                         .map_both(|v| v - 0.5)
+                        .map_x(|x| x * (abs_width as f64 / abs_height as f64))
                         .to_polar()
                         .map_y(|y| y - child.params.rotation)
                         .to_cartesian()
+                        .map_x(|x| x * (abs_height as f64 / abs_width as f64))
                         .map_both(|v| v + 0.5);
                     
                     let bounds_checked = uv.map_both(|v| (v >= 0.0 && v <= 1.0) as u8);
