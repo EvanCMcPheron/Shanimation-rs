@@ -20,9 +20,7 @@ use crossterm::{
     cursor::{Hide, MoveToPreviousLine},
     execute,
     style::{Color, Print, ResetColor, SetForegroundColor},
-    terminal::{
-        BeginSynchronizedUpdate, EndSynchronizedUpdate,
-    },
+    terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate},
 };
 use std::cmp::{max, min};
 use std::time::Instant;
@@ -290,7 +288,7 @@ impl Scene {
         Ok(video_bytes)
     }
     fn run_behaviours(&self, time: Duration) {
-        let mut stack: Vec<(Point<isize>, Point<f64>, Arc<RwLock<Renderable>>)> = vec![]; 
+        let mut stack: Vec<(Point<isize>, Point<f64>, Arc<RwLock<Renderable>>)> = vec![];
         self.children
             .iter()
             .map(Clone::clone)
@@ -322,8 +320,7 @@ impl Scene {
                 .iter()
                 .map(Clone::clone)
                 .map(|c| (next_offset, next_scale, c))
-                .for_each(|c| stack.push(c))
-                ;
+                .for_each(|c| stack.push(c));
             child.run_behaviour(time, self, next_offset);
         }
     }
@@ -374,20 +371,30 @@ impl Scene {
 
             use std::f64::consts::PI;
             let center_to_corner = 0.5 / (abs_width.powi(2) + abs_height.powi(2)).inv_sqrt64();
-            let theta_a = 2.0*abs_height.atan2(abs_width);
+            let theta_a = 2.0 * abs_height.atan2(abs_width);
             let rot = child.params.rotation % (PI * 2.0);
-            let theta_u = if (rot >= 0.0 && rot <= PI/2.0) || (rot >= PI && rot <= 3.0*PI/2.0) {rot} else {rot - theta_a};
-            let d_height = center_to_corner * ((theta_u + theta_a / 2.0).sin().abs() - (theta_a / 2.0).sin());
-            let theta_u = if (rot >= 0.0 && rot <= PI/2.0) || (rot >= PI && rot <= 3.0*PI/2.0) {rot - theta_a} else {rot};
-            let d_width = center_to_corner * ((theta_u + theta_a / 2.0).cos().abs() - (theta_a / 2.0).cos());
+            let theta_u = if (rot >= 0.0 && rot <= PI / 2.0) || (rot >= PI && rot <= 3.0 * PI / 2.0)
+            {
+                rot
+            } else {
+                rot - theta_a
+            };
+            let d_height =
+                center_to_corner * ((theta_u + theta_a / 2.0).sin().abs() - (theta_a / 2.0).sin());
+            let theta_u = if (rot >= 0.0 && rot <= PI / 2.0) || (rot >= PI && rot <= 3.0 * PI / 2.0)
+            {
+                rot - theta_a
+            } else {
+                rot
+            };
+            let d_width =
+                center_to_corner * ((theta_u + theta_a / 2.0).cos().abs() - (theta_a / 2.0).cos());
 
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
             let up_left_unchecked = Point::new(next_offset.x, next_offset.y);
             let down_right_unchecked = Point::new(
-                up_left_unchecked.x
-                    + (abs_width as isize),
-                up_left_unchecked.y
-                    + (abs_height as isize),
+                up_left_unchecked.x + (abs_width as isize),
+                up_left_unchecked.y + (abs_height as isize),
             );
             let up_left = up_left_unchecked
                 .map_x(|x| x - d_width as isize)
@@ -417,16 +424,16 @@ impl Scene {
                         .to_cartesian()
                         .map_x(|x| x * (abs_height as f64 / abs_width as f64))
                         .map_both(|v| v + 0.5);
-                    
+
                     let bounds_checked = uv.map_both(|v| (v >= 0.0 && v <= 1.0) as u8);
 
                     let c = Point::new(p.x as usize, p.y as usize);
 
                     if bounds_checked.x == 0 || bounds_checked.y == 0 {
-                        img_buffer.set_pixel(c,Rgba([0,0,0,0]));
+                        img_buffer.set_pixel(c, Rgba([0, 0, 0, 0]));
                         return ();
                     }
-                    
+
                     let color = child.run_shader(&old_image, uv, time, next_offset);
                     let current_color = old_image.get_pixel(c);
                     let a = color.0[3];
@@ -441,7 +448,7 @@ impl Scene {
                     }; //Not sure if this is how alpha mixing SHOULD work, but it seems right?
                     let new_color = Rgba([mixer(0), mixer(1), mixer(2), a_mixer()]);
 
-                    img_buffer.set_pixel(c,new_color);
+                    img_buffer.set_pixel(c, new_color);
                 })
         }
         //write image buffer to file

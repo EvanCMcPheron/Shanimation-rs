@@ -6,8 +6,20 @@ use std::time::Duration;
 pub mod closure_renderable;
 
 pub trait Behaviour: DynClone + Send + Sync {
-    fn process(&mut self, renderable: &mut RenderableParams, time: Duration, scene: &Scene, abs_position: Point<isize>);
-    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration, abs_position: Point<isize>) -> Rgba<u8>; //Not intended to mutate any state in this method
+    fn process(
+        &mut self,
+        renderable: &mut RenderableParams,
+        time: Duration,
+        scene: &Scene,
+        abs_position: Point<isize>,
+    );
+    fn get_pixel(
+        &self,
+        current_frame: &Img,
+        uv_coords: Point<f64>,
+        time: Duration,
+        abs_position: Point<isize>,
+    ) -> Rgba<u8>; //Not intended to mutate any state in this method
 }
 clone_trait_object!(Behaviour);
 
@@ -75,12 +87,14 @@ impl Renderable {
         current_frame: &Img,
         uv_coords: Point<f64>,
         time: Duration,
-        abs_position: Point<isize>
+        abs_position: Point<isize>,
     ) -> Rgba<u8> {
-        self.behaviour.get_pixel(current_frame, uv_coords, time, abs_position)
+        self.behaviour
+            .get_pixel(current_frame, uv_coords, time, abs_position)
     }
     pub fn run_behaviour(&mut self, time: Duration, scene: &Scene, abs_position: Point<isize>) {
-        self.behaviour.process(&mut self.params, time, scene, abs_position);
+        self.behaviour
+            .process(&mut self.params, time, scene, abs_position);
     }
     pub fn builder() -> RenderableBuilder {
         RenderableBuilder {
@@ -107,7 +121,7 @@ pub struct RenderableBuilder {
     behaviour: Option<Box<dyn Behaviour>>,
 }
 
-impl RenderableBuilder {    
+impl RenderableBuilder {
     pub fn add_child(&mut self, child: Renderable) -> &mut Self {
         self.children.push(Arc::new(RwLock::new(child)));
         self
@@ -154,13 +168,20 @@ impl RenderableBuilder {
         #[derive(Clone)]
         struct DummyBehaviour;
         impl Behaviour for DummyBehaviour {
-            fn process(&mut self, _: &mut RenderableParams, _: Duration, _: &Scene, _: Point<isize>) {}
+            fn process(
+                &mut self,
+                _: &mut RenderableParams,
+                _: Duration,
+                _: &Scene,
+                _: Point<isize>,
+            ) {
+            }
             fn get_pixel(
                 &self,
                 _current_frame: &Img,
                 _uv_coords: Point<f64>,
                 _time: Duration,
-                _: Point<isize>
+                _: Point<isize>,
             ) -> Rgba<u8> {
                 Rgba([0, 0, 0, 0])
             }

@@ -4,7 +4,7 @@ use std::time::Duration;
 /// Ex:
 /// ```
 /// use shanimation_rs::prelude::*;
-/// 
+///
 /// ClosureRenderable {
 ///    data: (),
 ///    process: |data, params, time, scene, abs_position| {
@@ -18,7 +18,7 @@ use std::time::Duration;
 ///```
 #[derive(Clone)]
 pub struct ClosureRenderable<T, P, S>
-where  
+where
     T: Clone + Send + Sync,
     P: Fn(&mut T, &mut RenderableParams, Duration, &Scene, Point<isize>) + Clone + Send + Sync,
     S: Fn(&T, &Img, Point<f64>, Duration, Point<isize>) -> Rgba<u8> + Clone + Send + Sync,
@@ -29,15 +29,27 @@ where
 }
 
 impl<T, P, S> Behaviour for ClosureRenderable<T, P, S>
-where  
+where
     T: Clone + Send + Sync,
     P: Fn(&mut T, &mut RenderableParams, Duration, &Scene, Point<isize>) + Clone + Send + Sync,
     S: Fn(&T, &Img, Point<f64>, Duration, Point<isize>) -> Rgba<u8> + Clone + Send + Sync,
 {
-    fn process(&mut self, params: &mut RenderableParams, time: Duration, scene: &Scene, abs_position: Point<isize>) {
+    fn process(
+        &mut self,
+        params: &mut RenderableParams,
+        time: Duration,
+        scene: &Scene,
+        abs_position: Point<isize>,
+    ) {
         (self.process)(&mut self.data, params, time, scene, abs_position);
     }
-    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration, abs_position: Point<isize>) -> Rgba<u8> {
+    fn get_pixel(
+        &self,
+        current_frame: &Img,
+        uv_coords: Point<f64>,
+        time: Duration,
+        abs_position: Point<isize>,
+    ) -> Rgba<u8> {
         (self.shader)(&self.data, current_frame, uv_coords, time, abs_position)
     }
 }

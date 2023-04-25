@@ -1,12 +1,14 @@
 #![feature(slice_pattern)]
 pub mod prelude {
     pub use super::point::Point;
+    pub use super::renderable::{
+        closure_renderable::ClosureRenderable, Behaviour, Renderable, RenderableParams,
+    };
+    pub use super::resolution_consts::*;
+    pub use super::scene::{Img, Scene};
     pub use error_stack::{Context, IntoReport, Report, Result, ResultExt};
     pub use error_stack_derive::ErrorStack;
-    pub use super::scene::{Scene, Img};
     pub use image::Rgba;
-    pub use super::renderable::{Renderable, Behaviour, closure_renderable::ClosureRenderable, RenderableParams};
-    pub use super::resolution_consts::*;
 }
 
 pub mod encoding;

@@ -2,9 +2,7 @@ use core::slice::SlicePattern;
 
 use image::{Rgb, RgbImage, RgbaImage};
 pub use openh264::encoder::RateControlMode;
-use openh264::{
-    formats::YUVBuffer,
-};
+use openh264::formats::YUVBuffer;
 
 pub(crate) fn rgba_to_rgb(image: RgbaImage) -> RgbImage {
     let mut ret = RgbImage::new(image.width(), image.height());

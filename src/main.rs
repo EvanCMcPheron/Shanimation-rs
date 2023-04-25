@@ -4,8 +4,6 @@ use error_stack_derive::ErrorStack;
 use shanimation_rs::{prelude::*, scene};
 use std::time::Duration;
 
-
-
 #[derive(Debug, ErrorStack)]
 #[error_message("Error occured in main fn")]
 pub struct MainError;
