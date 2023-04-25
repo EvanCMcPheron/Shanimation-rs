@@ -14,6 +14,8 @@ use crate::encoding::RateControlMode;
 use image::RgbaImage;
 use openh264::encoder::{Encoder, EncoderConfig};
 
+use fast_inv_sqrt::InvSqrt64;
+
 use crossterm::{
     cursor::{Hide, MoveToPreviousLine},
     execute,
@@ -102,7 +104,6 @@ impl Scene {
     pub fn add_child(&mut self, child: Arc<RwLock<Renderable>>) {
         self.children.push(child);
     }
-
     fn render_frames(&self) -> Result<Vec<u8>, SceneRenderingError> {
         println!("Rendering video...\n");
         //figure out frame count, with matching duration to send to behaviour and shader
@@ -289,21 +290,41 @@ impl Scene {
         Ok(video_bytes)
     }
     fn run_behaviours(&self, time: Duration) {
-        let mut stack: Vec<Arc<RwLock<Renderable>>> = vec![]; //(offset, child)
+        let mut stack: Vec<(Point<isize>, Point<f64>, Arc<RwLock<Renderable>>)> = vec![]; 
         self.children
             .iter()
             .map(Clone::clone)
+            .map(|c| (Point::new(0, 0), Point::new(1.0, 1.0), c))
             .for_each(|v| stack.push(v));
         //for each child, run their run their behaviour's process, then for every pixel, run their get_pixel (THIS CAN EASILY BE PARRELLELIZED) and overide the pixel on the main image buffer'
-        while let Some(child) = stack.pop() {
+        while let Some((residual_offset, residual_scale, child)) = stack.pop() {
             let mut child = child.write().unwrap();
-            child.run_behaviour(time);
+            //child.run_behaviour(time);
+
+            // This scale should be multiplied against the dimensions when calculating the bottom right point (and also get passed to children), but only residual scale should be applied to the top left point.
+            let next_scale = Point::new(
+                residual_scale.x * child.params.scale.x,
+                residual_scale.y * child.params.scale.y,
+            );
+
+            //This should be passed down to children AND used for coordinate calculations
+            let next_offset = Point::new(
+                residual_offset.x
+                    + (child.params.position.x * self.resolution.x as f64 * residual_scale.x)
+                        as isize,
+                residual_offset.y
+                    + (child.params.position.y * self.resolution.y as f64 * residual_scale.y)
+                        as isize,
+            );
+
             child
-                .params
                 .get_children()
                 .iter()
                 .map(Clone::clone)
-                .for_each(|c| stack.push(c));
+                .map(|c| (next_offset, next_scale, c))
+                .for_each(|c| stack.push(c))
+                ;
+            child.run_behaviour(time, self, next_offset);
         }
     }
     fn render_frame(
@@ -314,7 +335,7 @@ impl Scene {
         //create an empty rgba image buffer
         let mut img_buffer = Img::new(self.resolution);
         //'recursively' iterate through all children of the scene, and their children, (run from top down)
-        let mut stack: Vec<(Point<isize>, Point<f64>, Arc<RwLock<Renderable>>)> = vec![]; //(offset, child)
+        let mut stack: Vec<(Point<isize>, Point<f64>, Arc<RwLock<Renderable>>)> = vec![];
         self.children
             .iter()
             .map(Clone::clone)
@@ -347,13 +368,18 @@ impl Scene {
                 .map(Clone::clone)
                 .map(|c| (next_offset, next_scale, c))
                 .for_each(|c| stack.push(c));
+
+            let abs_width = child.params.size.x * self.resolution.y as f64 * next_scale.x;
+            let abs_height = child.params.size.y * self.resolution.y as f64 * next_scale.y;
+
+
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
             let up_left_unchecked = Point::new(next_offset.x, next_offset.y);
             let down_right_unchecked = Point::new(
                 up_left_unchecked.x
-                    + ((child.params.size.x * self.resolution.x as f64 * next_scale.x) as isize),
+                    + (abs_width as isize),
                 up_left_unchecked.y
-                    + ((child.params.size.y * self.resolution.y as f64 * next_scale.y) as isize),
+                    + (abs_height as isize),
             );
             let up_left = Point::new(max(up_left_unchecked.x, 0), max(up_left_unchecked.y, 0));
             let down_right = Point::new(
@@ -371,9 +397,23 @@ impl Scene {
                 })
                 .flatten()
                 .for_each(|p| {
-                    let uv = to_uv(up_left_unchecked, down_right_unchecked, p);
-                    let color = child.run_shader(&old_image, uv, time);
+                    let uv = to_uv(up_left_unchecked, down_right_unchecked, p)
+                        .map_both(|v| v - 0.5)
+                        .to_polar()
+                        .map_y(|y| y - child.params.rotation)
+                        .to_cartesian()
+                        .map_both(|v| v + 0.5);
+                    
+                    let bounds_checked = uv.map_both(|v| (v >= 0.0 && v <= 1.0) as u8);
+
                     let c = Point::new(p.x as usize, p.y as usize);
+
+                    if bounds_checked.x == 0 || bounds_checked.y == 0 {
+                        img_buffer.set_pixel(c,Rgba([0,0,0,0]));
+                        return ();
+                    }
+                    
+                    let color = child.run_shader(&old_image, uv, time, next_offset);
                     let current_color = old_image.get_pixel(c);
                     let a = color.0[3];
                     let mixer = |i: usize| {
@@ -386,7 +426,8 @@ impl Scene {
                             .unwrap_or(255)
                     }; //Not sure if this is how alpha mixing SHOULD work, but it seems right?
                     let new_color = Rgba([mixer(0), mixer(1), mixer(2), a_mixer()]);
-                    img_buffer.set_pixel(c, new_color);
+
+                    img_buffer.set_pixel(c,new_color);
                 })
         }
         //write image buffer to file

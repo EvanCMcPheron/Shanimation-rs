@@ -6,8 +6,8 @@ use std::time::Duration;
 pub mod closure_renderable;
 
 pub trait Behaviour: DynClone + Send + Sync {
-    fn process(&mut self, renderable: &mut RenderableParams, time: Duration);
-    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration) -> Rgba<u8>; //Not intended to mutate any state in this method
+    fn process(&mut self, renderable: &mut RenderableParams, time: Duration, scene: &Scene, abs_position: Point<isize>);
+    fn get_pixel(&self, current_frame: &Img, uv_coords: Point<f64>, time: Duration, abs_position: Point<isize>) -> Rgba<u8>; //Not intended to mutate any state in this method
 }
 clone_trait_object!(Behaviour);
 
@@ -23,6 +23,7 @@ pub struct RenderableParams {
     pub scale: Point<f64>,
     pub position: Point<f64>,
     pub size: Point<f64>,
+    pub rotation: f64,
 }
 
 impl RenderableParams {
@@ -74,14 +75,16 @@ impl Renderable {
         current_frame: &Img,
         uv_coords: Point<f64>,
         time: Duration,
+        abs_position: Point<isize>
     ) -> Rgba<u8> {
-        self.behaviour.get_pixel(current_frame, uv_coords, time)
+        self.behaviour.get_pixel(current_frame, uv_coords, time, abs_position)
     }
-    pub fn run_behaviour(&mut self, time: Duration) {
-        self.behaviour.process(&mut self.params, time);
+    pub fn run_behaviour(&mut self, time: Duration, scene: &Scene, abs_position: Point<isize>) {
+        self.behaviour.process(&mut self.params, time, scene, abs_position);
     }
     pub fn builder() -> RenderableBuilder {
         RenderableBuilder {
+            rotation: 0.0,
             scale: Point::new(1.0, 1.0),
             children: vec![],
             position: Some(Point::new(0.0, 0.0)),
@@ -100,10 +103,11 @@ pub struct RenderableBuilder {
     position: Option<Point<f64>>,
     scale: Point<f64>,
     size: Option<Point<f64>>,
+    rotation: f64,
     behaviour: Option<Box<dyn Behaviour>>,
 }
 
-impl RenderableBuilder {
+impl RenderableBuilder {    
     pub fn add_child(&mut self, child: Renderable) -> &mut Self {
         self.children.push(Arc::new(RwLock::new(child)));
         self
@@ -122,6 +126,10 @@ impl RenderableBuilder {
     }
     pub fn with_scale(&mut self, x: f64, y: f64) -> &mut Self {
         self.scale = Point::new(x, y);
+        self
+    }
+    pub fn with_rotation(&mut self, rotation: f64) -> &mut Self {
+        self.rotation = rotation;
         self
     }
     pub fn build(&mut self) -> Result<Renderable, RenderableBuilderError> {
@@ -146,12 +154,13 @@ impl RenderableBuilder {
         #[derive(Clone)]
         struct DummyBehaviour;
         impl Behaviour for DummyBehaviour {
-            fn process(&mut self, _: &mut RenderableParams, _: Duration) {}
+            fn process(&mut self, _: &mut RenderableParams, _: Duration, _: &Scene, _: Point<isize>) {}
             fn get_pixel(
                 &self,
                 _current_frame: &Img,
                 _uv_coords: Point<f64>,
                 _time: Duration,
+                _: Point<isize>
             ) -> Rgba<u8> {
                 Rgba([0, 0, 0, 0])
             }
@@ -159,6 +168,7 @@ impl RenderableBuilder {
 
         Ok(Renderable {
             params: RenderableParams {
+                rotation: self.rotation,
                 children: std::mem::replace(&mut self.children, vec![]),
                 scale: self.scale,
                 position: self.position.unwrap(),
