@@ -3,21 +3,18 @@ use std::time::Duration;
 
 /// Ex:
 /// ```
-/// Renderable::builder()
-///     .with_position(Point::new(0.1, 0.1))
-///     .with_size(Point::new(0.3, 0.3))
-///     .with_behaviour(Box::new(ClosureRenderable {
-///         data: (),
-///         process: |data, params, time| {
-///             params.position.x += time.as_secs_f64().cos() * 0.02;
-///         },
-///         shader: |data, frame, uv, time| -> Rgba<u8> {
-///             let p = uv.map_both(|v| (v * 255.0) as u8);
-///             Rgba([255, p.x, p.y, 255])
-///         },
-///     }))
-///     .build()
-///     .unwrap();
+/// use shanimation_rs::prelude::*;
+/// 
+/// ClosureRenderable {
+///    data: (),
+///    process: |data, params, time, scene, abs_position| {
+///        params.rotation = time.as_secs_f64() * 2.0;
+///    },
+///    shader: |data, frame, uv, time, abs_position| -> Rgba<u8> {
+///        let p = uv.map_both(|v| (v * 255.0) as u8);
+///        Rgba([255, p.x, p.y, 255])
+///    },
+/// };
 ///```
 #[derive(Clone)]
 pub struct ClosureRenderable<T, P, S>

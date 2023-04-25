@@ -22,8 +22,7 @@ fn main() -> Result<(), MainError> {
             },
             shader: |data, frame, uv, time, abs_position| -> Rgba<u8> {
                 let p = uv.map_both(|v| (v * 255.0) as u8);
-                let is_in_circle = true;
-                Rgba([255, p.x, p.y, 255 * is_in_circle as u8])
+                Rgba([255, p.x, p.y, 255])
             },
         }))
         .build()
