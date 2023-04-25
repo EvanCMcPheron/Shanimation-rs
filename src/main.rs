@@ -12,8 +12,8 @@ pub struct MainError;
 
 fn main() -> Result<(), MainError> {
     let main_renderable = Renderable::builder()
-        .with_position(0.2, 0.2)
-        .with_size(0.1, 0.4)
+        .with_position(0.2, 0.0)
+        .with_size(0.3, 0.3)
         .with_rotation(2.0)
         .with_behaviour(Box::new(ClosureRenderable {
             data: (),
@@ -22,7 +22,7 @@ fn main() -> Result<(), MainError> {
             },
             shader: |data, frame, uv, time, abs_position| -> Rgba<u8> {
                 let p = uv.map_both(|v| (v * 255.0) as u8);
-                let is_in_circle = true;//uv.map_both(|v| v - 0.5).to_polar().x <= 0.5;
+                let is_in_circle = true;
                 Rgba([255, p.x, p.y, 255 * is_in_circle as u8])
             },
         }))

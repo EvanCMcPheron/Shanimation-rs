@@ -372,6 +372,14 @@ impl Scene {
             let abs_width = child.params.size.x * self.resolution.y as f64 * next_scale.x;
             let abs_height = child.params.size.y * self.resolution.y as f64 * next_scale.y;
 
+            use std::f64::consts::PI;
+            let center_to_corner = 0.5 / (abs_width.powi(2) + abs_height.powi(2)).inv_sqrt64();
+            let theta_a = 2.0*abs_height.atan2(abs_width);
+            let rot = child.params.rotation % (PI * 2.0);
+            let theta_u = if (rot >= 0.0 && rot <= PI/2.0) || (rot >= PI && rot <= 3.0*PI/2.0) {rot} else {rot - theta_a};
+            let d_height = center_to_corner * ((theta_u + theta_a / 2.0).sin().abs() - (theta_a / 2.0).sin());
+            let theta_u = if (rot >= 0.0 && rot <= PI/2.0) || (rot >= PI && rot <= 3.0*PI/2.0) {rot - theta_a} else {rot};
+            let d_width = center_to_corner * ((theta_u + theta_a / 2.0).cos().abs() - (theta_a / 2.0).cos());
 
             //For every pixel within the bounds of the shader, run the get_pixel fn and overide the pixel on the main image buffer
             let up_left_unchecked = Point::new(next_offset.x, next_offset.y);
@@ -381,11 +389,15 @@ impl Scene {
                 up_left_unchecked.y
                     + (abs_height as isize),
             );
-            let up_left = Point::new(max(up_left_unchecked.x, 0), max(up_left_unchecked.y, 0));
-            let down_right = Point::new(
-                min(self.resolution.x as isize, down_right_unchecked.x),
-                min(self.resolution.y as isize, down_right_unchecked.y),
-            );
+            let up_left = up_left_unchecked
+                .map_x(|x| x - d_width as isize)
+                .map_y(|y| y - d_height as isize)
+                .map_both(|v| max(v, 0));
+            let down_right = down_right_unchecked
+                .map_x(|x| x + d_width as isize)
+                .map_y(|y| y + d_height as isize)
+                .map_x(|x| min(self.resolution.x as isize, x))
+                .map_y(|y| min(self.resolution.y as isize, y));
 
             let old_image = img_buffer.clone();
 
