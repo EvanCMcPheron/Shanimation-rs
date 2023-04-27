@@ -1,4 +1,7 @@
 #![feature(slice_pattern)]
+#![allow(dead_code)]
+#![warn(missing_docs)]
+
 pub mod prelude {
     pub use super::point::Point;
     pub use super::renderable::{
