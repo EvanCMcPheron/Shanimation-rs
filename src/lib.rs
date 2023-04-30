@@ -1,6 +1,6 @@
 #![feature(slice_pattern)]
 #![allow(dead_code)]
-#![warn(missing_docs)]
+//#![warn(missing_docs)]
 
 pub mod prelude {
     pub use super::point::Point;
@@ -9,6 +9,8 @@ pub mod prelude {
     };
     pub use super::resolution_consts::*;
     pub use super::scene::{Img, Scene};
+    pub use super::tools::curves::*;
+    pub use super::tools::keyframing::*;
     pub use error_stack::{Context, IntoReport, Report, Result, ResultExt};
     pub use error_stack_derive::ErrorStack;
     pub use image::Rgba;

@@ -113,3 +113,12 @@ impl<T: Display + Num + Copy> SubAssign for Point<T> {
         };
     }
 }
+
+impl<F: Display + Num + Copy, T: Display + Num + Copy + From<F>> From<(F, F)> for Point<T> {
+    fn from(value: (F, F)) -> Self {
+        Point {
+            x: From::<F>::from(value.0),
+            y: From::<F>::from(value.1),
+        }
+    }
+}

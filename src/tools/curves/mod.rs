@@ -1,7 +1,7 @@
 use crate::prelude::*;
-use dyn_clone::{DynClone, clone_trait_object};
-use std::marker::PhantomData;
+use dyn_clone::{clone_trait_object, DynClone};
 use num_traits::Float;
+use std::marker::PhantomData;
 
 pub mod chainable_curves;
 pub mod single_curves;
@@ -12,7 +12,6 @@ pub trait Curve: DynClone + Send + Sync {
 }
 clone_trait_object!(Curve<Value = f32>);
 clone_trait_object!(Curve<Value = f64>);
-
 
 pub(crate) fn min_f<T: Float + PartialOrd>(a: T, b: T) -> T {
     if a < b {

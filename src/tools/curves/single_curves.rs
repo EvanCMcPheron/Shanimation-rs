@@ -1,6 +1,6 @@
-use std::marker::PhantomData;
-use num_traits::Float;
 use super::Curve;
+use num_traits::Float;
+use std::marker::PhantomData;
 
 pub trait SingleCurve {}
 
@@ -43,4 +43,5 @@ impl<T, C> SingleCurve for ClosureCurve<T, C>
 where
     T: Float + Clone + Send + Sync,
     C: Fn(T) -> T + Clone + Send + Sync,
-{}
+{
+}

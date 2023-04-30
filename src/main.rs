@@ -1,10 +1,7 @@
 use error_stack::{Result, ResultExt};
 use error_stack_derive::ErrorStack;
 
-use shanimation_rs::{prelude::*, scene, tools::curves::{
-    chainable_curves::*,
-    Curve,
-}};
+use shanimation_rs::prelude::*;
 use std::time::Duration;
 
 #[derive(Debug, ErrorStack)]
@@ -17,15 +14,9 @@ fn main() -> Result<(), MainError> {
         .with_size(0.3, 0.3)
         .with_rotation(2.0)
         .with_behaviour(Box::new(ClosureRenderable {
-            data: (
-                SmoothCurve(vec![Point::new(1.0, 0.0), Point::new(2.0, 0.4), Point::new(3.0, 0.4), Point::new(5.0, 0.1)]),
-                SmoothCurve(vec![Point::new(0.3, 0.01), Point::new(1.0, 0.1), Point::new(2.0, 0.1), Point::new(2.7, 0.01)]),
-                0.01,
-            ),
+            data: (LinearKeyframes::new(vec![(1.0, 0.2), (2.0, 0.7)]), 0.01),
             process: |data, params, time, scene, abs_position| {
-                params.rotation += data.2;
-                params.position.x = data.0.get_value(time.as_secs_f64());
-                data.2 = data.1.get_value(time.as_secs_f64());
+                params.position.x = data.0.get_value(time);
             },
             shader: |data, frame, uv, time, abs_position| -> Rgba<u8> {
                 let p = uv.map_both(|v| (v * 255.0) as u8);

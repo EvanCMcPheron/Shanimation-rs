@@ -1,4 +1,4 @@
 pub mod curves;
 pub mod image;
-pub mod movement;
+pub mod keyframing;
 pub mod video;
