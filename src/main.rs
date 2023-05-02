@@ -13,8 +13,8 @@ fn main() -> Result<(), MainError> {
         .with_position(0.2, 0.1)
         .with_size(0.3, 0.3)
         .with_rotation(2.0)
-        .with_behaviour(Box::new(ClosureRenderable {
-            data: (LinearKeyframes::new(vec![(1.0, 0.2), (2.0, 0.7)]), 0.01),
+        .with_behaviour(Box::new(ClosureBehaviour {
+            data: (SmoothKeyframes::new(vec![(1.0, 0.2), (2.0, 0.7)]), 0.01),
             process: |data, params, time, scene, abs_position| {
                 params.position.x = data.0.get_value(time);
             },

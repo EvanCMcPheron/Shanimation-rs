@@ -5,7 +5,7 @@
 pub mod prelude {
     pub use super::point::Point;
     pub use super::renderable::{
-        closure_renderable::ClosureRenderable, Behaviour, Renderable, RenderableParams,
+        closure_behaviour::ClosureBehaviour, Behaviour, Renderable, RenderableParams,
     };
     pub use super::resolution_consts::*;
     pub use super::scene::{Img, Scene};

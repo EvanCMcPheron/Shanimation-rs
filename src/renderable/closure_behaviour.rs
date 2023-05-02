@@ -17,7 +17,7 @@ use std::time::Duration;
 /// };
 ///```
 #[derive(Clone)]
-pub struct ClosureRenderable<T, P, S>
+pub struct ClosureBehaviour<T, P, S>
 where
     T: Clone + Send + Sync,
     P: Fn(&mut T, &mut RenderableParams, Duration, &Scene, Point<isize>) + Clone + Send + Sync,
@@ -28,7 +28,7 @@ where
     pub shader: S,
 }
 
-impl<T, P, S> Behaviour for ClosureRenderable<T, P, S>
+impl<T, P, S> Behaviour for ClosureBehaviour<T, P, S>
 where
     T: Clone + Send + Sync,
     P: Fn(&mut T, &mut RenderableParams, Duration, &Scene, Point<isize>) + Clone + Send + Sync,

@@ -3,7 +3,7 @@ use dyn_clone::{clone_trait_object, DynClone};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-pub mod closure_renderable;
+pub mod closure_behaviour;
 pub mod finite_state_machine;
 
 pub trait Behaviour: DynClone + Send + Sync {
