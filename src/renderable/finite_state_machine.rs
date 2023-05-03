@@ -78,12 +78,26 @@ impl FSMCore {
             .ok_or(Report::new(FSMError::StateDoesntExist(self.state.clone())))?
             .exit(name.clone());
 
+        let old_state = self.state;
+
         self.state = name.clone();
 
         self.states
             .get_mut(&self.state)
             .ok_or(Report::new(FSMError::StateDoesntExist(self.state.clone())))?
-            .entry(Some(name));
+            .entry(Some(old_state));
+
+        Ok(())
+    }
+    pub fn init_state(&mut self) -> Result<(), FSMError> {
+        if self.states.contains_key(&self.state) {
+            return Err(Report::new(FSMError::StateDoesntExist(self.state)));
+        }
+
+        self.states
+            .get_mut(&self.state)
+            .ok_or(Report::new(FSMError::StateDoesntExist(self.state.clone())))?
+            .entry(None);
 
         Ok(())
     }
@@ -126,12 +140,17 @@ impl FSMBuilder {
         if self.state.is_empty() {
             return Err(Report::new(FSMBuilderError::NoInitState));
         }
-        Ok(FiniteStateMachine {
+        
+        let mut fsm = FiniteStateMachine {
             fsm: FSMCore {
                 states: self.states,
                 state: self.state,
             },
-        })
+        };
+
+        fsm.fsm.init_state();
+
+        Ok(fsm)
     }
 }
 
