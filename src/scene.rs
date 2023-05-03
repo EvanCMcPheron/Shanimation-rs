@@ -333,10 +333,13 @@ impl Scene {
         let mut img_buffer = Img::new(self.resolution);
         //'recursively' iterate through all children of the scene, and their children, (run from top down)
         let mut stack: Vec<(Point<isize>, Point<f64>, Arc<RwLock<Renderable>>)> = vec![];
+
+        let offset = std::cmp::min(-1, (-3 as f64 * (self.resolution.x as f64 / RESOLUTION_4K.x as f64)) as isize);
+
         self.children
             .iter()
             .map(Clone::clone)
-            .map(|c| (Point::new(0, 0), Point::new(1.0, 1.0), c))
+            .map(|c| (Point::new(offset, offset), Point::new(1.0, 1.0), c))
             .for_each(|v| stack.push(v));
         //for each child, run their run their behaviour's process, then for every pixel, run their get_pixel (THIS CAN EASILY BE PARRELLELIZED) and overide the pixel on the main image buffer'
         while let Some((residual_offset, residual_scale, child)) = stack.pop() {
