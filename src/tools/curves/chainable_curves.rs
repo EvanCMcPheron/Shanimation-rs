@@ -1,5 +1,5 @@
-use super::{max_f, min_f, Curve};
-use crate::prelude::*;
+use super::{Curve};
+
 use num_traits::Float;
 use std::fmt::Display;
 

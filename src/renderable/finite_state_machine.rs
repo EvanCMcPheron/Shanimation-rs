@@ -21,19 +21,19 @@ pub struct FiniteStateMachine {
 impl Behaviour for FiniteStateMachine {
     fn process(
         &mut self,
-        renderable: &mut RenderableParams,
-        time: Duration,
-        scene: &Scene,
-        abs_position: Point<isize>,
+        _renderable: &mut RenderableParams,
+        _time: Duration,
+        _scene: &Scene,
+        _abs_position: Point<isize>,
     ) {
         todo!()
     }
     fn get_pixel(
         &self,
-        current_frame: &Img,
-        uv_coords: Point<f64>,
-        time: Duration,
-        abs_position: Point<isize>,
+        _current_frame: &Img,
+        _uv_coords: Point<f64>,
+        _time: Duration,
+        _abs_position: Point<isize>,
     ) -> Rgba<u8> {
         todo!()
     }

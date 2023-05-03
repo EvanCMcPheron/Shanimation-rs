@@ -11,7 +11,7 @@ pub mod prelude {
     pub use super::scene::{Img, Scene};
     pub use super::tools::curves::*;
     pub use super::tools::keyframing::*;
-    pub(crate) use error_stack::{Context, IntoReport, Report, Result, ResultExt};
+    pub(crate) use error_stack::{IntoReport, Report, Result, ResultExt};
     pub(crate) use error_stack_derive::ErrorStack;
     pub use image::Rgba;
 }

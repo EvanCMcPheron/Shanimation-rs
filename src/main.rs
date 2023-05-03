@@ -15,10 +15,10 @@ fn main() -> Result<(), MainError> {
         .with_rotation(2.0)
         .with_behaviour(Box::new(ClosureBehaviour {
             data: (SmoothKeyframes::new(vec![(1.0, 0.2), (2.0, 0.7)]), 0.01),
-            process: |data, params, time, scene, abs_position| {
+            process: |data, params, time, _scene, _abs_position| {
                 params.position.x = data.0.get_value(time);
             },
-            shader: |data, frame, uv, time, abs_position| -> Rgba<u8> {
+            shader: |_data, _frame, uv, _time, _abs_position| -> Rgba<u8> {
                 let p = uv.map_both(|v| (v * 255.0) as u8);
                 Rgba([255, p.x, p.y, 255])
             },
