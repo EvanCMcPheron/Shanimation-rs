@@ -111,7 +111,7 @@ pub enum FSMBuilderError {
     #[error_message("No states were added to the machine.")]
     NoStates,
     #[error_message("Failed to init state.")]
-    FailedToInit
+    FailedToInit,
 }
 
 #[derive(Clone)]
@@ -142,7 +142,7 @@ impl FSMBuilder {
         if self.state.is_empty() {
             return Err(Report::new(FSMBuilderError::NoInitState));
         }
-        
+
         let mut fsm = FiniteStateMachine {
             fsm: FSMCore {
                 states: self.states,
@@ -150,7 +150,9 @@ impl FSMBuilder {
             },
         };
 
-        fsm.fsm.init_state().change_context(FSMBuilderError::FailedToInit)?;
+        fsm.fsm
+            .init_state()
+            .change_context(FSMBuilderError::FailedToInit)?;
 
         Ok(fsm)
     }

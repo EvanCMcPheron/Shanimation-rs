@@ -1,4 +1,4 @@
-use super::{Curve};
+use super::Curve;
 
 use num_traits::Float;
 use std::fmt::Display;
