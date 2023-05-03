@@ -78,7 +78,7 @@ impl FSMCore {
             .ok_or(Report::new(FSMError::StateDoesntExist(self.state.clone())))?
             .exit(name.clone());
 
-        let old_state = self.state;
+        let old_state = self.state.clone();
 
         self.state = name.clone();
 
@@ -91,7 +91,7 @@ impl FSMCore {
     }
     pub fn init_state(&mut self) -> Result<(), FSMError> {
         if self.states.contains_key(&self.state) {
-            return Err(Report::new(FSMError::StateDoesntExist(self.state)));
+            return Err(Report::new(FSMError::StateDoesntExist(self.state.clone())));
         }
 
         self.states
@@ -110,6 +110,8 @@ pub enum FSMBuilderError {
     NoInitState,
     #[error_message("No states were added to the machine.")]
     NoStates,
+    #[error_message("Failed to init state.")]
+    FailedToInit
 }
 
 #[derive(Clone)]
@@ -148,7 +150,7 @@ impl FSMBuilder {
             },
         };
 
-        fsm.fsm.init_state();
+        fsm.fsm.init_state().change_context(FSMBuilderError::FailedToInit)?;
 
         Ok(fsm)
     }
