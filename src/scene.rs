@@ -334,7 +334,10 @@ impl Scene {
         //'recursively' iterate through all children of the scene, and their children, (run from top down)
         let mut stack: Vec<(Point<isize>, Point<f64>, Arc<RwLock<Renderable>>)> = vec![];
 
-        let offset = std::cmp::min(-1, (-3 as f64 * (self.resolution.x as f64 / RESOLUTION_4K.x as f64)) as isize);
+        let offset = std::cmp::min(
+            -1,
+            (-3 as f64 * (self.resolution.x as f64 / RESOLUTION_4K.x as f64)) as isize,
+        );
 
         self.children
             .iter()

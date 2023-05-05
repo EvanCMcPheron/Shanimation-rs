@@ -1,16 +1,18 @@
 use crate::prelude::*;
 use dyn_clone::{clone_trait_object, DynClone};
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::Duration;
 
 #[derive(Debug, ErrorStack)]
 pub enum FSMError {
-    #[error_message("Failed to add state to finite state machine.")]
+    #[error_message("Failed to add a state to the states hashmap")]
     AddState,
-    #[error_message("Failed to remove state from finite state machine.")]
-    RemoveState,
     #[error_message("State {0} doesn't exist")]
     StateDoesntExist(String),
+    #[error_message("RwLock returned an error, ownership issue.")]
+    OwnershipIssue,
 }
 
 #[derive(Clone)]
@@ -47,45 +49,81 @@ impl FiniteStateMachine {
 
 #[derive(Clone)]
 pub struct FSMCore {
-    states: HashMap<String, Box<dyn FSMState>>,
+    states: HashMap<String, Arc<RwLock<Box<dyn FSMState>>>>,
     state: String,
 }
 
 impl FSMCore {
-    pub fn add_state(&mut self, name: String, state: Box<dyn FSMState>) -> Result<(), FSMError> {
+    pub fn add_state(&mut self, name: &str, state: Box<dyn FSMState>) -> Result<(), FSMError> {
         self.states
-            .insert(name, state)
+            .insert(name.to_owned(), Arc::new(RwLock::new(state)))
             .ok_or(Report::new(FSMError::AddState))?;
         Ok(())
     }
-    pub fn remove_state(&mut self, name: String) -> Result<Box<dyn FSMState>, FSMError> {
-        self.states
-            .remove(&name)
-            .ok_or(Report::new(FSMError::RemoveState))
+    pub fn remove_state(&mut self, name: &str) -> Result<Box<dyn FSMState>, FSMError> {
+        Ok(*self
+            .states
+            .remove(name)
+            .ok_or(Report::new(FSMError::StateDoesntExist(name.to_owned())))
+            .attach_printable_lazy(|| "Failed to find and remove state in states hashmap.")?
+            .write()
+            .map_err(|e| {
+                Report::new(FSMError::OwnershipIssue).attach_printable(format!(
+                    "Failed to get write lock rwlock containing state: \n{}",
+                    e.to_string()
+                ))
+            })?
+            .deref_mut())
     }
-    pub fn get_state(&self, name: String) -> Option<&Box<dyn FSMState>> {
-        self.states.get(&name)
+    pub fn get_state(&self, name: &str) -> Result<RwLockReadGuard<Box<dyn FSMState>>, FSMError> {
+        Ok(self
+            .states
+            .get(name)
+            .ok_or(Report::new(FSMError::StateDoesntExist(name.to_owned())))?
+            .read()
+            .map_err(|e| {
+                Report::new(FSMError::OwnershipIssue).attach_printable(format!(
+                    "Failed to get read lock rwlock containing state: \n{}",
+                    e.to_string()
+                ))
+            })?)
     }
-    pub fn get_state_mut(&mut self, name: String) -> Option<&mut Box<dyn FSMState>> {
-        self.states.get_mut(&name)
+    pub fn get_state_mut(
+        &mut self,
+        name: &str,
+    ) -> Result<RwLockWriteGuard<Box<dyn FSMState>>, FSMError> {
+        Ok(self
+            .states
+            .get(name)
+            .ok_or(Report::new(FSMError::StateDoesntExist(name.to_owned())))?
+            .write()
+            .map_err(|e| {
+                Report::new(FSMError::OwnershipIssue).attach_printable(format!(
+                    "Failed to get write lock rwlock containing state: \n{}",
+                    e.to_string()
+                ))
+            })?)
     }
-    pub fn change_state(&mut self, name: String) -> Result<(), FSMError> {
-        if self.states.contains_key(&name) {
-            return Err(Report::new(FSMError::StateDoesntExist(name)));
+    pub fn change_state(&mut self, name: &str) -> Result<(), FSMError> {
+        if self.states.contains_key(name) {
+            return Err(Report::new(FSMError::StateDoesntExist(name.to_owned())));
         }
-        self.states
-            .get_mut(&self.state)
-            .ok_or(Report::new(FSMError::StateDoesntExist(self.state.clone())))?
-            .exit(name.clone());
 
-        let old_state = self.state.clone();
+        let mut current_state = self
+            .get_state_mut(&self.state)
+            .attach_printable("Failed to get mutable access to current state")?;
 
-        self.state = name.clone();
+        let mut next_state = self
+            .get_state_mut(name)
+            .attach_printable("Failed to get mutable access to next state")?;
 
-        self.states
-            .get_mut(&self.state)
-            .ok_or(Report::new(FSMError::StateDoesntExist(self.state.clone())))?
-            .entry(Some(old_state));
+        current_state.exit(next_state); //Passes next state to state exit fn, where the reference drops, allowing for it to be grabbed again right after
+
+        let mut next_state = self
+            .get_state_mut(name)
+            .attach_printable("Failed to get mutable access to next state")?;
+
+        next_state.entry(Some(current_state));
 
         Ok(())
     }
@@ -174,8 +212,8 @@ pub trait FSMState: DynClone + Send + Sync {
         time: Duration,
         abs_position: Point<isize>,
     ) -> Rgba<u8>;
-    fn entry(&mut self, from: Option<String>);
-    fn exit(&mut self, to: String);
+    fn entry(&mut self, from: Option<RwLockWriteGuard<Box<dyn FSMState>>>);
+    fn exit(&mut self, to: RwLockWriteGuard<Box<dyn FSMState>>);
 }
 
 clone_trait_object! {FSMState}
