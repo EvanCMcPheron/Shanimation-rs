@@ -23,19 +23,22 @@ pub struct FiniteStateMachine {
 impl Behaviour for FiniteStateMachine {
     fn process(
         &mut self,
-        _renderable: &mut RenderableParams,
-        _time: Duration,
-        _scene: &Scene,
-        _abs_position: Point<isize>,
+        renderable: &mut RenderableParams,
+        time: Duration,
+        scene: &Scene,
+        abs_position: Point<isize>,
     ) {
-        todo!()
+        let state = self.fsm
+            .get_state_mut(&self.fsm.state)
+            .unwrap()
+            .process(fsm, renderable, time, scene, abs_position);
     }
     fn get_pixel(
         &self,
-        _current_frame: &Img,
-        _uv_coords: Point<f64>,
-        _time: Duration,
-        _abs_position: Point<isize>,
+        current_frame: &Img,
+        uv_coords: Point<f64>,
+        time: Duration,
+        abs_position: Point<isize>,
     ) -> Rgba<u8> {
         todo!()
     }
@@ -60,20 +63,12 @@ impl FSMCore {
             .ok_or(Report::new(FSMError::AddState))?;
         Ok(())
     }
-    pub fn remove_state(&mut self, name: &str) -> Result<Box<dyn FSMState>, FSMError> {
-        Ok(*self
-            .states
+    pub fn remove_state(&mut self, name: &str) -> Result<(), FSMError> {
+        self.states
             .remove(name)
             .ok_or(Report::new(FSMError::StateDoesntExist(name.to_owned())))
-            .attach_printable_lazy(|| "Failed to find and remove state in states hashmap.")?
-            .write()
-            .map_err(|e| {
-                Report::new(FSMError::OwnershipIssue).attach_printable(format!(
-                    "Failed to get write lock rwlock containing state: \n{}",
-                    e.to_string()
-                ))
-            })?
-            .deref_mut())
+            .attach_printable_lazy(|| "Failed to find and remove state in states hashmap.")?;
+        Ok(())
     }
     pub fn get_state(&self, name: &str) -> Result<RwLockReadGuard<Box<dyn FSMState>>, FSMError> {
         Ok(self
@@ -104,23 +99,39 @@ impl FSMCore {
                 ))
             })?)
     }
+    fn get_state_mut_interior(
+        &self,
+        name: &str,
+    ) -> Result<RwLockWriteGuard<Box<dyn FSMState>>, FSMError> {
+        Ok(self
+            .states
+            .get(name)
+            .ok_or(Report::new(FSMError::StateDoesntExist(name.to_owned())))?
+            .write()
+            .map_err(|e| {
+                Report::new(FSMError::OwnershipIssue).attach_printable(format!(
+                    "Failed to get write lock rwlock containing state: \n{}",
+                    e.to_string()
+                ))
+            })?)
+    }
     pub fn change_state(&mut self, name: &str) -> Result<(), FSMError> {
         if self.states.contains_key(name) {
             return Err(Report::new(FSMError::StateDoesntExist(name.to_owned())));
         }
 
         let mut current_state = self
-            .get_state_mut(&self.state)
+            .get_state_mut_interior(&self.state)
             .attach_printable("Failed to get mutable access to current state")?;
 
-        let mut next_state = self
-            .get_state_mut(name)
+        let next_state = self
+            .get_state_mut_interior(name)
             .attach_printable("Failed to get mutable access to next state")?;
 
         current_state.exit(next_state); //Passes next state to state exit fn, where the reference drops, allowing for it to be grabbed again right after
 
         let mut next_state = self
-            .get_state_mut(name)
+            .get_state_mut_interior(name)
             .attach_printable("Failed to get mutable access to next state")?;
 
         next_state.entry(Some(current_state));
@@ -132,11 +143,12 @@ impl FSMCore {
             return Err(Report::new(FSMError::StateDoesntExist(self.state.clone())));
         }
 
-        self.states
-            .get_mut(&self.state)
-            .ok_or(Report::new(FSMError::StateDoesntExist(self.state.clone())))?
-            .entry(None);
-
+        Ok(self.get_state_mut_interior(&self.state)?.entry(None))
+    }
+    pub fn run_process(&mut self) -> Result<(), FSMError> {
+        let state = self.get_state_mut_interior(&self.state).unwrap();
+        
+        
         Ok(())
     }
 }
@@ -154,7 +166,7 @@ pub enum FSMBuilderError {
 
 #[derive(Clone)]
 pub struct FSMBuilder {
-    pub states: HashMap<String, Box<dyn FSMState>>,
+    pub states: HashMap<String, Arc<RwLock<Box<dyn FSMState>>>>,
     pub state: String,
 }
 
@@ -166,7 +178,9 @@ impl FSMBuilder {
         }
     }
     pub fn add_state(&mut self, name: String, state: Box<dyn FSMState>) -> &mut Self {
-        self.states.insert(name, state).unwrap();
+        self.states
+            .insert(name, Arc::new(RwLock::new(state)))
+            .unwrap();
         self
     }
     pub fn init_state(&mut self, name: String) -> &mut Self {
@@ -227,8 +241,8 @@ where
         + Sync
         + Fn(&mut D, &mut FSMCore, &mut RenderableParams, Duration, &Scene, Point<isize>),
     S: Clone + Send + Sync + Fn(&D, &Img, Point<f64>, Duration, Point<isize>) -> Rgba<u8>,
-    Entry: Clone + Send + Sync + Fn(&mut D, Option<String>),
-    Exit: Clone + Send + Sync + Fn(&mut D, String),
+    Entry: Clone + Send + Sync + Fn(&mut D, Option<RwLockWriteGuard<Box<dyn FSMState>>>),
+    Exit: Clone + Send + Sync + Fn(&mut D, RwLockWriteGuard<Box<dyn FSMState>>),
 {
     pub data: D,
     pub process: P,
@@ -245,13 +259,13 @@ where
         + Sync
         + Fn(&mut D, &mut FSMCore, &mut RenderableParams, Duration, &Scene, Point<isize>),
     S: Clone + Send + Sync + Fn(&D, &Img, Point<f64>, Duration, Point<isize>) -> Rgba<u8>,
-    Entry: Clone + Send + Sync + Fn(&mut D, Option<String>),
-    Exit: Clone + Send + Sync + Fn(&mut D, String),
+    Entry: Clone + Send + Sync + Fn(&mut D, Option<RwLockWriteGuard<Box<dyn FSMState>>>),
+    Exit: Clone + Send + Sync + Fn(&mut D, RwLockWriteGuard<Box<dyn FSMState>>),
 {
-    fn entry(&mut self, from: Option<String>) {
+    fn entry(&mut self, from: Option<RwLockWriteGuard<Box<dyn FSMState>>>) {
         (self.entry)(&mut self.data, from)
     }
-    fn exit(&mut self, to: String) {
+    fn exit(&mut self, to: RwLockWriteGuard<Box<dyn FSMState>>) {
         (self.exit)(&mut self.data, to)
     }
     fn get_pixel(
